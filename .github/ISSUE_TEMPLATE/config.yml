@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin/security/policy
+    about: Report suspected vulnerabilities privately. Do not include sensitive details in a public issue.
+  - name: Herdr plugin documentation
+    url: https://herdr.dev/docs/plugins/
+    about: Learn how Herdr installs and runs plugins.
+  - name: Blaxel Sandbox documentation
+    url: https://docs.blaxel.ai/Sandboxes/Overview
+    about: Learn how Blaxel Sandboxes work.

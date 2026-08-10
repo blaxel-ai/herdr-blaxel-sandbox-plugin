@@ -2,12 +2,35 @@
 
 Thanks for improving the Blaxel Sandbox plugin for Herdr.
 
-Before opening a pull request:
+## Before you start
 
-1. Keep the change focused on the plugin and its documented lifecycle.
-2. Do not commit credentials, private source, local paths, or generated plugin state.
-3. Run `npm ci`, `npm run check`, `npm run test:coverage`, and `npm audit`.
-4. For runtime changes, test the affected flow in Herdr with a temporary Blaxel Sandbox and remove that Sandbox afterward.
-5. Explain the user-facing behavior, verification, and any compatibility change in the pull request.
+Use an issue for a bug report or a focused feature proposal. For security problems, follow [SECURITY.md](SECURITY.md) instead.
 
-Security reports do not belong in public issues. Follow [SECURITY.md](SECURITY.md).
+Read the [design and lifecycle](docs/design.md) before changing Sandbox ownership, upload filtering, persistent sessions, patch handling, or deletion behavior.
+
+## Local setup
+
+```bash
+npm ci
+herdr plugin link /absolute/path/to/herdr-blaxel-sandbox-plugin
+herdr plugin list
+herdr plugin action list --plugin blaxel.sandbox
+```
+
+## Checks
+
+Run the complete local suite before you open a pull request:
+
+```bash
+npm run check
+npm run test:coverage
+npm audit
+```
+
+For runtime changes, test the affected flow in Herdr with a temporary Blaxel Sandbox. Record what you verified and remove that Sandbox afterward.
+
+## Pull requests
+
+Keep each pull request focused. Explain the user-facing change, its verification, and any compatibility impact.
+
+Do not commit credentials, private source, machine-specific paths, temporary fixtures, or generated plugin state.

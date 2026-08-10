@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible problem with the plugin.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for helping us improve the plugin. Do not include credentials, private source, or access tokens.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Tell us what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: Include the smallest safe sequence that reproduces the problem.
+      placeholder: |
+        1. Open...
+        2. Run...
+        3. See...
+    validations:
+      required: true
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: herdr-version
+    attributes:
+      label: Herdr version
+    validations:
+      required: true
+  - type: input
+    id: blaxel-version
+    attributes:
+      label: Blaxel CLI version
+    validations:
+      required: true
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options:
+        - Codex
+        - Claude Code
+        - OpenCode
+        - Not agent-specific
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Safe output
+      description: Paste relevant output after removing tokens, private paths, repository contents, and account details.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Final checks
+      options:
+        - label: I removed credentials, tokens, private source, and account details.
+          required: true
+        - label: I searched for an existing report.
+          required: true

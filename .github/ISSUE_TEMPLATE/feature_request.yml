@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose one focused improvement to the plugin.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem should this solve?
+      description: Describe the user need before describing the implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would a good solution look like?
+      description: Keep the proposal focused on one outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried?
+      description: Share current workarounds or alternatives when relevant.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This request is specific to the Herdr and Blaxel Sandbox workflow.
+          required: true
+        - label: I searched for an existing request.
+          required: true
