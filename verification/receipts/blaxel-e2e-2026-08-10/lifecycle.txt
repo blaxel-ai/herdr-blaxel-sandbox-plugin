@@ -1,0 +1,12 @@
+PASS plugin linked into Herdr 0.8.0 with 11 actions and 5 panes.
+PASS the first Start or Replace invocation printed the complete Blaxel target, eligible file list, total bytes, and digest without creating or modifying a remote resource.
+PASS the second invocation continued only for the unchanged target and digest; file and provisioning-setting changes invalidated approval.
+PASS live upload excluded ignored, environment, and detected-secret content.
+PASS provisioning created the declared image, memory, region, TTL, private ports, labels, files, remote Git baseline, shell wrapper, and one pinned agent.
+PASS the installed agent version was read back before the mapping became ready.
+PASS the official Blaxel terminal connection opened inside a Herdr pane at the matching repository subdirectory.
+PASS closing and reconnecting returned to the same persistent tmux session.
+PASS a remote binary Git patch applied locally after git apply --check; a repeat returned no change and a local conflict changed nothing.
+PASS a private preview returned HTTP 200 with a short-lived token shown only in the popup.
+PASS the dashboard opened, Stop ended only the agent session, and the Sandbox files remained available for reconnect.
+PASS replacement and deletion required an interactive typed DELETE; cancellation changed nothing.

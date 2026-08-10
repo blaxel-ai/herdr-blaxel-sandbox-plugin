@@ -1,0 +1,10 @@
+Verification time: 2026-08-10T17:32:25Z
+Plugin: Blaxel Sandbox for Herdr 0.1.0
+Herdr: 0.8.0
+Blaxel CLI: 0.1.108
+Blaxel SDK: @blaxel/core 0.3.11
+Node.js: 26.3.0
+npm: 11.16.0
+Runtime image: blaxel/ts-app:latest
+Runtime base: Debian-based Node 22 with glibc
+Execution: isolated local Herdr session and short-lived Blaxel Sandboxes

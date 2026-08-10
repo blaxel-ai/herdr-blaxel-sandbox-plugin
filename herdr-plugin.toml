@@ -1,0 +1,122 @@
+id = "blaxel.sandbox"
+name = "Blaxel Sandbox"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Run one coding-agent CLI per persistent Blaxel sandbox."
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["npm", "ci", "--omit=dev"]
+
+[[actions]]
+id = "connect-blaxel"
+title = "Connect Blaxel workspace"
+description = "Open the official Blaxel CLI login flow. This does not create a sandbox."
+contexts = ["workspace", "pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "start-agent"
+title = "Start configured agent in Blaxel"
+description = "Preview the filtered upload, then start one persistent Blaxel sandbox on the matching second invocation."
+contexts = ["workspace", "pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "reconnect"
+title = "Reconnect to Blaxel agent"
+description = "Attach to the persistent agent session mapped to the focused Herdr pane."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "apply-changes"
+title = "Apply Blaxel changes locally"
+description = "Download the next binary Git patch and apply it only after git apply --check succeeds."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "stop"
+title = "Stop Blaxel agent"
+description = "Stop the remote agent session while preserving the sandbox filesystem."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "info"
+title = "Show Blaxel mapping"
+description = "Show the mapped sandbox, agent, lifecycle, paths, and previews."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "logs"
+title = "Show Blaxel agent output"
+description = "Capture recent output from the persistent remote agent terminal."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "previews"
+title = "Open Blaxel previews"
+description = "Discover configured application ports and open a private preview panel."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "dashboard"
+title = "Open Blaxel dashboard"
+description = "Open a live control panel for every sandbox tracked by this plugin."
+contexts = ["global", "workspace", "pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "replace-sandbox"
+title = "Replace Blaxel sandbox"
+description = "Require typed confirmation, then replace the tracked sandbox with a fresh one."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[actions]]
+id = "delete-sandbox"
+title = "Delete Blaxel sandbox"
+description = "Require typed confirmation, then delete the tracked sandbox and forget its mapping."
+contexts = ["pane"]
+command = ["node", "src/action.mjs"]
+
+[[panes]]
+id = "agent"
+title = "Blaxel agent"
+placement = "split"
+command = ["node", "src/agent-pane.mjs"]
+
+[[panes]]
+id = "blaxel-login"
+title = "Connect Blaxel"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["node", "src/login-pane.mjs"]
+
+[[panes]]
+id = "dashboard"
+title = "Blaxel dashboard"
+placement = "zoomed"
+command = ["node", "src/dashboard.mjs"]
+
+[[panes]]
+id = "previews"
+title = "Blaxel previews"
+placement = "popup"
+width = "88%"
+height = "70%"
+command = ["node", "src/previews-pane.mjs"]
+
+[[panes]]
+id = "confirmation"
+title = "Confirm Blaxel sandbox deletion"
+placement = "popup"
+width = "72%"
+height = "55%"
+command = ["node", "src/confirmation-pane.mjs"]

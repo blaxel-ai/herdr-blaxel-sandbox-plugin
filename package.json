@@ -1,0 +1,50 @@
+{
+  "name": "herdr-blaxel-sandbox-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Run coding agents in persistent Blaxel sandboxes from Herdr.",
+  "type": "module",
+  "scripts": {
+    "check": "npm run format:check && npm run lint && npm run verify:manifest && npm run verify:receipts && npm test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "verify:manifest": "node scripts/verify-manifest.mjs",
+    "verify:receipts": "node scripts/verify-receipts.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@blaxel/core": "0.3.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "eslint": "^9.33.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2"
+  },
+  "overrides": {
+    "js-yaml": "4.3.1"
+  },
+  "keywords": [
+    "herdr",
+    "herdr-plugin",
+    "blaxel",
+    "sandbox",
+    "codex",
+    "claude-code",
+    "opencode"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin.git"
+  },
+  "homepage": "https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin/issues"
+  },
+  "license": "Apache-2.0"
+}

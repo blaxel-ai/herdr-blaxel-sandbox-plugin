@@ -1,0 +1,5 @@
+PASS Codex 0.147.0 installed, reported the pinned version, launched through the real Blaxel terminal, and was identified by Herdr as Codex.
+PASS Claude Code 2.1.226 installed, reported the pinned version, launched through the real Blaxel terminal, and was identified by Herdr as Claude.
+PASS OpenCode 1.14.48 installed, reported the pinned version, launched through the real Blaxel terminal, and was identified by Herdr as OpenCode.
+NOTE OpenCode is intentionally pinned below releases that embed the incompatible Bun 1.3.14 runtime observed during image testing.
+PASS all three adapters keep authentication inside the Sandbox and copy no host agent credentials.
