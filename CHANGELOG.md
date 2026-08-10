@@ -9,3 +9,5 @@
 - Keep existing mappings pinned to their original Blaxel workspace and matching repository subdirectory.
 - Open the official Blaxel login flow automatically when Start needs account or workspace setup.
 - Add direct GitHub installation and automatic Herdr marketplace discovery packaging.
+- Keep generated Sandbox names within Blaxel's 49-character limit while preserving the full worktree digest.
+- Add live Terminal screenshots of the remote agent workflow and Sandbox dashboard.

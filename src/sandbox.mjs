@@ -8,6 +8,7 @@ import { SandboxInstance } from "@blaxel/core";
 import { agentInstallCommand, adapterCapabilities } from "./adapters.mjs";
 import {
   DEFAULT_INTERACTIVE_ENV_PATH,
+  MAX_SANDBOX_NAME_LENGTH,
   DEFAULT_SHELL_PATH,
 } from "./constants.mjs";
 import { runSync } from "./process.mjs";
@@ -26,7 +27,7 @@ function slug(value) {
 }
 
 export function sandboxNameFor({ prefix, agentKind, localRoot, sourcePaneId }) {
-  const base = slug(path.basename(localRoot)).slice(0, 20) || "worktree";
+  const prefixPart = slug(prefix).slice(0, 12);
   const agent = slug(agentKind).slice(0, 14);
   const digest = crypto
     .createHash("sha256")
@@ -35,9 +36,12 @@ export function sandboxNameFor({ prefix, agentKind, localRoot, sourcePaneId }) {
     )
     .digest("hex")
     .slice(0, 10);
-  return `${slug(prefix).slice(0, 12)}-${agent}-${base}-${digest}`
-    .slice(0, 63)
-    .replace(/-+$/, "");
+  const fixedLength = prefixPart.length + agent.length + digest.length + 3;
+  const baseLength = Math.max(1, MAX_SANDBOX_NAME_LENGTH - fixedLength);
+  const base =
+    slug(path.basename(localRoot)).slice(0, baseLength) ||
+    "worktree".slice(0, baseLength);
+  return `${prefixPart}-${agent}-${base}-${digest}`;
 }
 
 export function tmuxSessionFor(mapping) {

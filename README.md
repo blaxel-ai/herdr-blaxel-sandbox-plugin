@@ -9,6 +9,10 @@ Run Codex, Claude Code, or OpenCode in a persistent Blaxel Sandbox without leavi
 
 Your worktree stays local. The plugin sends a reviewed snapshot to Blaxel, keeps the agent running in a persistent remote session, and brings its changes back as a checked Git patch.
 
+![Herdr running OpenCode and the repository test suite in a live Blaxel Sandbox](docs/assets/herdr-blaxel-live-terminal.png)
+
+![The live Blaxel Sandbox dashboard inside Herdr](docs/assets/herdr-blaxel-dashboard-terminal.png)
+
 ```mermaid
 flowchart LR
     A["Worktree in Herdr"] --> B["Reviewed snapshot"]

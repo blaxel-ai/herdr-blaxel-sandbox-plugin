@@ -28,7 +28,7 @@ function testMapping() {
   };
 }
 
-test("sandboxNameFor is stable, scoped, and DNS sized", () => {
+test("sandboxNameFor is stable, scoped, and within Blaxel's name limit", () => {
   const input = {
     prefix: "Herdr",
     agentKind: "claude-code",
@@ -38,8 +38,17 @@ test("sandboxNameFor is stable, scoped, and DNS sized", () => {
   const first = sandboxNameFor(input);
   assert.equal(first, sandboxNameFor(input));
   assert.match(first, /^[a-z0-9-]+$/);
-  assert.ok(first.length <= 63);
+  assert.ok(first.length <= 49);
   assert.notEqual(first, sandboxNameFor({ ...input, sourcePaneId: "pane-2" }));
+
+  const repositoryName = sandboxNameFor({
+    prefix: "herdr-demo",
+    agentKind: "opencode",
+    localRoot: "/a/herdr-blaxel-sandbox-plugin",
+    sourcePaneId: "pane-1",
+  });
+  assert.ok(repositoryName.length <= 49);
+  assert.match(repositoryName, /-[0-9a-f]{10}$/);
 });
 
 test("the safe shell bootstraps the persistent wrapper only for interactive connections", () => {
