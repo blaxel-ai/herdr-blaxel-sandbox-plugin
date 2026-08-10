@@ -1,144 +1,111 @@
 # Blaxel Sandbox for Herdr
 
-Run Codex, Claude Code, or OpenCode in a persistent Blaxel Sandbox from a Herdr pane.
+[![CI](https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/blaxel-ai/herdr-blaxel-sandbox-plugin/actions/workflows/ci.yml)
+[![Herdr plugin](https://img.shields.io/badge/Herdr-plugin-111827)](https://herdr.dev/plugins/)
+[![Blaxel Sandbox](https://img.shields.io/badge/Blaxel-Sandbox-6d5dfc)](https://docs.blaxel.ai/Sandboxes/Overview)
+[![License](https://img.shields.io/github/license/blaxel-ai/herdr-blaxel-sandbox-plugin)](LICENSE)
 
-Herdr stays on your computer. The coding agent runs in Blaxel. A persistent `tmux` session keeps the agent alive when the local terminal disconnects.
+Run Codex, Claude Code, or OpenCode in a persistent Blaxel Sandbox without leaving Herdr.
 
-## What ships
+Your worktree stays local. The plugin sends a reviewed snapshot to Blaxel, keeps the agent running in a persistent remote session, and brings its changes back as a checked Git patch.
 
-- One Blaxel Sandbox for each local worktree and agent pair.
-- Codex `0.147.0`, Claude Code `2.1.226`, and OpenCode `1.14.48` adapters.
-- An exact Blaxel target and upload preview before any remote resource or file write.
-- Reconnect, stop, output, patch apply, previews, replacement, and deletion actions.
-- A dashboard for every Sandbox tracked by the plugin.
-- Private previews by default. Public previews require explicit configuration.
+```mermaid
+flowchart LR
+    A["Worktree in Herdr"] --> B["Reviewed snapshot"]
+    B --> C["Persistent Blaxel Sandbox"]
+    C --> D["Codex, Claude Code, or OpenCode"]
+    D --> E["Checked Git patch back"]
+```
 
-## Requirements
+## Quick start
 
-- macOS or Linux
-- Herdr `0.8.0` or newer
-- Node.js `22` or newer
-- Git
-- Blaxel CLI `0.1.108` or newer
-- A Blaxel account and workspace
+You need [Herdr 0.8.0 or newer](https://herdr.dev/docs/), [Node.js 22 or newer](https://nodejs.org/en/download), Git, and the [Blaxel CLI](https://docs.blaxel.ai/cli-reference/introduction#install).
 
-## Install
+Install the plugin:
 
 ```bash
 herdr plugin install blaxel-ai/herdr-blaxel-sandbox-plugin
 ```
 
-Herdr shows the source and build commands once before installing. Use `--yes` only when you already trust this repository.
-
-For local development:
-
-```bash
-npm ci
-herdr plugin link /absolute/path/to/herdr-blaxel-sandbox-plugin
-herdr plugin list
-herdr plugin action list --plugin blaxel.sandbox
-```
-
-Start uses the current Blaxel CLI workspace automatically. If the CLI is signed out or has no current workspace, Start opens the official `bl login` flow. Sign in, then run Start again. **Connect Blaxel workspace** is also available when you want to sign in or switch accounts first.
-
-## Start an agent
+Then:
 
 1. Open a Git worktree in Herdr.
 2. Run **Start configured agent in Blaxel**.
-3. Review the workspace, agent, image, settings, exact files, total size, and digest.
+3. Review the target, settings, and files that will be uploaded.
 4. Run the same action again within ten minutes.
-5. Use the new Herdr pane as the remote agent terminal.
+5. Work in the new **Blaxel agent** pane.
 
-The second action approves only the unchanged target and digest. A file or provisioning-setting change creates a new preview and needs a new second action.
+That is the complete default setup. The plugin uses Codex and your current Blaxel workspace unless you choose something else.
 
-You can also invoke an action from the Herdr CLI:
+If you are signed out, Start opens the official Blaxel login flow. Sign in, then run Start again.
 
-```bash
-herdr plugin action invoke start-agent --plugin blaxel.sandbox
-```
+## What you get
 
-Context actions require a focused Herdr pane. Keybindings provide the normal workflow:
+- One persistent Sandbox for each worktree and agent pair.
+- Built-in Codex, Claude Code, and OpenCode support.
+- Reconnectable agent sessions that survive local terminal disconnects.
+- Private application previews for common development ports.
+- A checked Git patch when you bring remote changes back.
+- A dashboard for every Sandbox tracked by the plugin.
 
-```toml
-[[keys.command]]
-key = "prefix+shift+s"
-type = "plugin_action"
-command = "blaxel.sandbox.start-agent"
-description = "start the configured agent in Blaxel"
+## Choose an agent
 
-[[keys.command]]
-key = "prefix+shift+c"
-type = "plugin_action"
-command = "blaxel.sandbox.reconnect"
-description = "reconnect the Blaxel agent"
-
-[[keys.command]]
-key = "prefix+shift+a"
-type = "plugin_action"
-command = "blaxel.sandbox.apply-changes"
-description = "apply Blaxel changes locally"
-
-[[keys.command]]
-key = "prefix+shift+b"
-type = "plugin_action"
-command = "blaxel.sandbox.dashboard"
-description = "open the Blaxel dashboard"
-```
-
-Run `herdr config check` and `herdr server reload-config` after you add keybindings.
-
-## Configure
-
-Find the Herdr-managed config directory:
+Find the plugin's managed configuration directory:
 
 ```bash
 herdr plugin config-dir blaxel.sandbox
 ```
 
-Create `config.json` there. Every key is optional:
+Create `config.json` there with the agent you want:
 
 ```json
 {
-  "agent": "codex",
-  "workspace": null,
-  "region": null,
-  "image": "blaxel/ts-app:latest",
-  "memory": 4096,
-  "remoteRoot": "/workspace",
-  "idleDelete": "7d",
-  "sandboxNamePrefix": "herdr",
-  "previewPorts": [3000, 4173, 5173, 8000],
-  "publicPreviews": false,
-  "excludedPaths": ["private-fixtures/"],
-  "allowSensitivePaths": [],
-  "maxFiles": 10000,
-  "maxFileBytes": 10485760,
-  "maxUploadBytes": 104857600,
-  "uploadApprovalSeconds": 600
+  "agent": "claude-code"
 }
 ```
 
-Use `codex`, `claude-code`, or `opencode` for `agent`. Unknown keys and invalid values fail closed.
+Use `codex`, `claude-code`, or `opencode`. Every setting is optional. See the [configuration reference](docs/configuration.md) for workspace, region, image, memory, preview, upload, and lifecycle options.
 
-When `workspace` is `null`, the plugin resolves the current Blaxel CLI workspace before the preview. It saves that exact workspace with the Sandbox mapping, so switching your CLI workspace later cannot redirect an existing mapping. `remoteRoot` must be `/workspace` or a path below it.
+## Actions
 
-Do not place tokens in `config.json`. The plugin never copies host coding-agent credentials. Sign in to the agent inside its Sandbox when needed.
+| Action                               | What it does                                                            |
+| ------------------------------------ | ----------------------------------------------------------------------- |
+| **Start configured agent in Blaxel** | Reviews the upload, creates or reuses the Sandbox, and opens the agent. |
+| **Reconnect to Blaxel agent**        | Reopens the persistent agent session.                                   |
+| **Apply Blaxel changes locally**     | Checks and applies the next remote Git patch.                           |
+| **Show Blaxel agent output**         | Shows recent terminal output without reconnecting.                      |
+| **Open Blaxel previews**             | Opens private application previews for configured ports.                |
+| **Open Blaxel dashboard**            | Shows every Sandbox tracked by the plugin.                              |
+| **Stop Blaxel agent**                | Stops the agent session but keeps its Sandbox and files.                |
+| **Replace Blaxel sandbox**           | Deletes the mapped Sandbox and creates a clean replacement.             |
+| **Delete Blaxel sandbox**            | Permanently deletes the Sandbox and forgets its mapping.                |
 
-## File and change safety
+You can run actions from Herdr's action picker, from a [keybinding](docs/keybindings.md), or from the CLI:
 
-The upload starts from Git tracked and untracked files. It excludes Git-ignored paths, `.git`, dependencies, environment files, credentials, private keys, cloud configuration, Terraform state, symlinks, and recognized token formats.
+```bash
+herdr plugin action invoke start-agent --plugin blaxel.sandbox
+```
 
-`allowSensitivePaths` accepts exact repository-relative files. Use it only after direct review.
+## Safety without friction
 
-Remote edits stay in the Sandbox until you run **Apply Blaxel changes locally**. The plugin exports a binary Git patch. It runs `git apply --check --binary` before it changes the local worktree. A conflict changes nothing.
+You see one complete review before the plugin creates a Sandbox or uploads files. Running Start again approves only that unchanged target and snapshot. If something material changes, the plugin shows a fresh review.
 
-**Stop Blaxel agent** ends only the remote `tmux` session. It preserves the Sandbox filesystem. Replacement and deletion need a typed `DELETE` confirmation.
+The plugin excludes Git-ignored files, dependencies, environment files, common credentials, private keys, cloud configuration, Terraform state, symlinks, and recognized token formats. It never copies host coding-agent credentials.
 
-## Preview policy
+Remote edits stay remote until you choose **Apply Blaxel changes locally**. The plugin checks the complete binary Git patch before changing your worktree. A conflict changes nothing.
 
-The plugin declares the configured ports when it creates the Sandbox. **Open Blaxel previews** lists current preview URLs.
+Only permanent replacement and deletion require a typed `DELETE`. Normal start, reconnect, stop, preview, and patch workflows do not.
 
-Private previews are the default. Their short-lived access token appears only in the popup. Set `publicPreviews` to `true` only when the application is safe for public access.
+## Learn more
+
+- [Configuration](docs/configuration.md)
+- [Keybindings](docs/keybindings.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Design and lifecycle](docs/design.md)
+- [Verification](docs/verification.md)
+- [Contributing](CONTRIBUTING.md)
+- [Herdr plugin documentation](https://herdr.dev/docs/plugins/)
+- [Blaxel Sandbox documentation](https://docs.blaxel.ai/Sandboxes/Overview)
 
 ## Development
 
@@ -149,8 +116,4 @@ npm run test:coverage
 npm audit
 ```
 
-See [design](docs/design.md), [verification](docs/verification.md), [troubleshooting](docs/troubleshooting.md), and [release steps](docs/releasing.md).
-
-## Status
-
-Version `0.1.0` is ready to install from this public repository. The checked live receipt is in [`verification/receipts`](verification/receipts).
+Version `0.1.0` is lifecycle-tested with Codex `0.147.0`, Claude Code `2.1.226`, and OpenCode `1.14.48`. See the [verification record](docs/verification.md) for the tested flows and evidence boundary.
