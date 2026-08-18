@@ -3,38 +3,78 @@ import readline from "node:readline";
 
 import { getAdapter } from "./adapters.mjs";
 import { loadConfig } from "./config.mjs";
-import { approvalFingerprint, buildUploadManifest } from "./manifest.mjs";
-import { PluginError, emitFailure, emitResult } from "./result.mjs";
+import { parsePluginContext } from "./context.mjs";
+import { closePluginPane, openPluginPane } from "./herdr.mjs";
+import {
+  buildUploadManifest,
+  formatManifest,
+  startSnapshotFingerprint,
+} from "./manifest.mjs";
+import { patchMapping } from "./mappings.mjs";
+import { PluginError, errorMessage } from "./result.mjs";
 import {
   deleteSandbox,
   provisionSandbox,
   resolveBlaxelWorkspace,
 } from "./sandbox.mjs";
-import { pendingStartMatches, readState, updateState } from "./state.mjs";
+import { startTarget } from "./start.mjs";
+import { readState, updateState } from "./state.mjs";
 
 const action = process.env.BLAXEL_HERDR_DESTRUCTIVE_ACTION || "unknown";
 
-function askForDelete(mapping) {
+function sourceContext() {
+  return parsePluginContext(
+    process.env.BLAXEL_HERDR_SOURCE_CONTEXT_JSON ??
+      process.env.HERDR_PLUGIN_CONTEXT_JSON,
+  );
+}
+
+function replacementPreview(mapping) {
+  const config = loadConfig();
+  const adapter = getAdapter(mapping.agentKind);
+  const workspace = mapping.blaxelWorkspace ?? resolveBlaxelWorkspace(config);
+  const manifest = buildUploadManifest(mapping.localRoot, config);
+  return {
+    config,
+    adapter,
+    workspace,
+    manifest,
+    fingerprint: startSnapshotFingerprint({ config, adapter, workspace }),
+    target: startTarget(config, adapter, workspace, mapping.sandboxName),
+  };
+}
+
+function askForDelete(mapping, preview) {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new PluginError(
       "interactive_confirmation_required",
       "Deletion confirmation requires an interactive terminal.",
     );
   }
+  process.stdout.write("\u001b[2J\u001b[H");
   process.stdout.write(
-    [
-      "Permanent Blaxel sandbox deletion",
-      "",
-      `Sandbox: ${mapping.sandboxName}`,
-      `Agent: ${mapping.agentKind}`,
-      `Local worktree: ${mapping.localRoot}`,
-      "",
-      action === "replace"
-        ? "This deletes the current sandbox and builds a replacement from the approved upload."
-        : "This deletes the sandbox and removes its local mapping.",
-      "Type DELETE within 60 seconds to continue: ",
-    ].join("\n"),
+    action === "replace"
+      ? "Replace Blaxel Sandbox\n\n"
+      : "Permanently delete Blaxel Sandbox\n\n",
   );
+  if (preview) {
+    process.stdout.write(
+      `${formatManifest(preview.manifest, {
+        target: preview.target,
+        approvalPrompt: false,
+      })}\n\n`,
+    );
+  } else {
+    process.stdout.write(
+      `Sandbox: ${mapping.sandboxName}\nAgent: ${mapping.agentKind}\nLocal worktree: ${mapping.localRoot}\n\n`,
+    );
+  }
+  process.stdout.write(
+    action === "replace"
+      ? "This permanently deletes the current Sandbox, then creates the shown replacement.\n"
+      : "This permanently deletes the Sandbox and removes its local mapping.\n",
+  );
+  process.stdout.write("Type DELETE within 60 seconds to continue: ");
   return new Promise((resolve) => {
     const terminal = readline.createInterface({
       input: process.stdin,
@@ -52,98 +92,82 @@ function askForDelete(mapping) {
   });
 }
 
-async function patchMapping(mappingId, patch) {
-  await updateState((state) => {
-    const mapping = state.mappings[mappingId];
-    if (!mapping)
-      throw new PluginError(
-        "mapping_not_found",
-        `Mapping ${mappingId} no longer exists.`,
-      );
-    state.mappings[mappingId] = {
-      ...mapping,
-      ...patch,
-      updatedAt: new Date().toISOString(),
-    };
-    return state;
-  });
-}
-
 async function deleteMapping(mapping) {
   await patchMapping(mapping.id, { lifecycleState: "deleting" });
   await deleteSandbox(mapping);
   await updateState((state) => {
     delete state.mappings[mapping.id];
-    delete state.pendingStarts[`replace:${mapping.id}`];
     return state;
   });
-  emitResult("delete-sandbox", "deleted", {
-    mappingId: mapping.id,
-    sandboxName: mapping.sandboxName,
-  });
+  if (mapping.remotePaneId) {
+    closePluginPane(mapping.remotePaneId, { check: false });
+  }
+  process.stdout.write(`\nDeleted ${mapping.sandboxName}.\n`);
 }
 
-async function replaceMapping(mapping) {
-  const config = loadConfig();
-  const adapter = getAdapter(mapping.agentKind);
-  const manifest = buildUploadManifest(mapping.localRoot, config);
-  const expectedDigest = process.env.BLAXEL_HERDR_MANIFEST_DIGEST;
-  const expectedFingerprint = process.env.BLAXEL_HERDR_PROVISIONING_FINGERPRINT;
-  const blaxelWorkspace =
-    mapping.blaxelWorkspace ?? resolveBlaxelWorkspace(config);
-  const currentFingerprint = approvalFingerprint({
-    config,
-    adapter,
-    workspace: blaxelWorkspace,
-  });
-  const pending = readState().pendingStarts[`replace:${mapping.id}`];
+function revalidateReplacement(mapping, preview) {
+  const fresh = replacementPreview(mapping);
   if (
-    !expectedDigest ||
-    !expectedFingerprint ||
-    manifest.digest !== expectedDigest ||
-    currentFingerprint !== expectedFingerprint ||
-    !pendingStartMatches(pending, manifest.digest, currentFingerprint)
+    fresh.manifest.digest !== preview.manifest.digest ||
+    fresh.fingerprint !== preview.fingerprint
   ) {
     throw new PluginError(
-      "replacement_approval_changed",
-      "The replacement upload changed or expired. Run Replace again.",
+      "replacement_snapshot_changed",
+      "The replacement target, configuration, or upload changed. Run Replace again to review it.",
     );
   }
+  return fresh;
+}
+
+async function replaceMapping(mapping, preview) {
+  const fresh = revalidateReplacement(mapping, preview);
+  process.stdout.write("\nDeleting the current Sandbox...\n");
   await patchMapping(mapping.id, { lifecycleState: "deleting" });
   await deleteSandbox(mapping);
+  if (mapping.remotePaneId) {
+    closePluginPane(mapping.remotePaneId, { check: false });
+  }
   await patchMapping(mapping.id, {
     lifecycleState: "creating",
     remotePaneId: null,
-    blaxelWorkspace,
-    uploadManifestDigest: manifest.digest,
+    blaxelWorkspace: fresh.workspace,
+    uploadManifestDigest: fresh.manifest.digest,
     lastAppliedExportCommit: null,
     lastError: null,
   });
   try {
     const refreshed = readState().mappings[mapping.id];
+    const labels = {
+      creating: "Creating replacement Sandbox",
+      uploading: "Uploading filtered files",
+      preparing: `Installing and preparing ${fresh.adapter.title}`,
+    };
     const provisioned = await provisionSandbox({
       mapping: refreshed,
-      manifest,
-      config,
-      adapter,
-      onLifecycle: (lifecycleState) =>
-        patchMapping(mapping.id, { lifecycleState }),
+      manifest: fresh.manifest,
+      config: fresh.config,
+      adapter: fresh.adapter,
+      onLifecycle: async (lifecycleState) => {
+        await patchMapping(mapping.id, { lifecycleState });
+        process.stdout.write(`  ${labels[lifecycleState]}...\n`);
+      },
     });
-    await patchMapping(mapping.id, {
+    const ready = await patchMapping(mapping.id, {
       lifecycleState: "ready",
       lastAppliedExportCommit: provisioned.baselineCommit,
       installedVersion: provisioned.installedVersion,
       capabilities: provisioned.capabilities,
+      lastError: null,
     });
-    await updateState((state) => {
-      delete state.pendingStarts[`replace:${mapping.id}`];
-      return state;
-    });
-    emitResult("replace-sandbox", "ready", {
-      mappingId: mapping.id,
-      sandboxName: mapping.sandboxName,
-      manifestDigest: manifest.digest,
-      nextAction: "Reconnect to Blaxel agent",
+    process.stdout.write(`\nReplacement ready: ${ready.sandboxName}\n`);
+    openPluginPane("agent", sourceContext(), {
+      placement: "split",
+      targetPaneId: ready.sourcePaneId,
+      env: {
+        BLAXEL_HERDR_MAPPING_ID: ready.id,
+        HERDR_AGENT: fresh.adapter.herdrDetectionKind,
+        BL_WORKSPACE: ready.blaxelWorkspace,
+      },
     });
   } catch (error) {
     await patchMapping(mapping.id, {
@@ -163,22 +187,21 @@ try {
   }
   const mappingId = process.env.BLAXEL_HERDR_MAPPING_ID;
   const mapping = mappingId ? readState().mappings[mappingId] : null;
-  if (!mapping)
+  if (!mapping) {
     throw new PluginError(
       "mapping_not_found",
       "The requested mapping no longer exists.",
     );
-  if (!(await askForDelete(mapping))) {
-    emitResult(`${action}-sandbox`, "canceled", {
-      mappingId: mapping.id,
-      sandboxName: mapping.sandboxName,
-    });
+  }
+  const preview = action === "replace" ? replacementPreview(mapping) : null;
+  if (!(await askForDelete(mapping, preview))) {
+    process.stdout.write("\nCanceled. Nothing was deleted.\n");
   } else if (action === "delete") {
     await deleteMapping(mapping);
   } else {
-    await replaceMapping(mapping);
+    await replaceMapping(mapping, preview);
   }
 } catch (error) {
-  emitFailure(`${action}-sandbox`, error);
+  process.stdout.write(`\n${errorMessage(error)}\n`);
   process.exitCode = 1;
 }

@@ -143,10 +143,14 @@ function manifestDigest(files) {
     .digest("hex");
 }
 
-export function approvalFingerprint({ config, adapter, workspace }) {
+export function startSnapshotFingerprint({ config, adapter, workspace }) {
   const target = {
     agent: adapter.kind,
     package: adapter.package,
+    agentArgs: config.agentArgs,
+    secretEnvironment: adapter.secretEnvironment.filter((name) =>
+      Boolean(process.env[name]),
+    ),
     workspace,
     region: config.region,
     image: config.image,
@@ -198,7 +202,14 @@ export function buildUploadManifest(root, config) {
       continue;
     }
     const absolutePath = path.join(root, ...relativePath.split("/"));
-    const stat = fs.lstatSync(absolutePath);
+    let stat;
+    try {
+      stat = fs.lstatSync(absolutePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      excluded.push({ path: relativePath, reason: "deleted" });
+      continue;
+    }
     if (!stat.isFile()) {
       excluded.push({
         path: relativePath,
@@ -254,6 +265,8 @@ export function formatManifest(manifest, options = {}) {
       `  Sandbox: ${target.sandboxName}`,
       `  Workspace: ${target.workspace}`,
       `  Agent: ${target.agent}`,
+      `  Agent arguments: ${target.agentArgs?.length > 0 ? target.agentArgs.join(" ") : "none"}`,
+      `  Encrypted provider secrets: ${target.secretEnvironment?.length > 0 ? target.secretEnvironment.join(", ") : "none (authenticate in the Sandbox)"}`,
       `  Image: ${target.image}`,
       `  Region: ${target.region ?? "workspace default"}`,
       `  Memory: ${target.memory} MB`,
@@ -278,9 +291,5 @@ export function formatManifest(manifest, options = {}) {
     for (const excluded of manifest.excluded)
       lines.push(`  ${excluded.path} [${excluded.reason}]`);
   }
-  lines.push(
-    "",
-    `Run ${options.actionTitle ?? "Start configured agent in Blaxel"} again within ${options.approvalSeconds ?? 600} seconds to approve this exact target and digest.`,
-  );
   return lines.join("\n");
 }

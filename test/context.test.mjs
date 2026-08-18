@@ -32,3 +32,19 @@ test("resolveGitContext finds the worktree root and relative cwd", () => {
     remove(root);
   }
 });
+
+test("resolveGitContext uses the Herdr worktree when the focused agent wandered outside it", () => {
+  const root = makeGitRepository();
+  try {
+    const resolved = resolveGitContext({
+      focused_pane_cwd: path.dirname(root),
+      focused_pane_id: "pane-1",
+      workspace_cwd: path.dirname(root),
+      worktree: { checkout_path: root },
+    });
+    assert.equal(resolved.root, fs.realpathSync.native(root));
+    assert.equal(resolved.cwd, fs.realpathSync.native(root));
+  } finally {
+    remove(root);
+  }
+});

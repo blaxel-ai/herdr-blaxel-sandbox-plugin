@@ -5,7 +5,6 @@ import test from "node:test";
 
 import {
   mappingForContext,
-  pendingStartMatches,
   readState,
   updateState,
   validateState,
@@ -77,7 +76,6 @@ test("updateState does not steal a live state lock", async () => {
 test("mappingForContext resolves remote panes before paths", () => {
   const state = {
     schemaVersion: 1,
-    pendingStarts: {},
     mappings: {
       first: {
         id: "first",
@@ -102,7 +100,6 @@ test("mappingForContext resolves remote panes before paths", () => {
 test("mappingForContext uses the configured agent for a shared source pane", () => {
   const state = {
     schemaVersion: 1,
-    pendingStarts: {},
     mappings: {
       codex: {
         id: "codex",
@@ -147,19 +144,7 @@ test("mappingForContext uses the configured agent for a shared source pane", () 
   assert.equal(mappingForContext(state, { focused_pane_id: "source" }), null);
 });
 
-test("pendingStartMatches requires the same fresh target and digest", () => {
-  const pending = {
-    manifestDigest: "abc",
-    provisioningFingerprint: "target",
-    expiresAt: 1_000,
-  };
-  assert.equal(pendingStartMatches(pending, "abc", "target", 999), true);
-  assert.equal(pendingStartMatches(pending, "def", "target", 999), false);
-  assert.equal(pendingStartMatches(pending, "abc", "changed", 999), false);
-  assert.equal(pendingStartMatches(pending, "abc", "target", 1_001), false);
-});
-
-test("validateState rejects incomplete mappings and pending approvals", () => {
+test("validateState rejects incomplete mappings", () => {
   assert.throws(
     () =>
       validateState({
@@ -167,22 +152,7 @@ test("validateState rejects incomplete mappings and pending approvals", () => {
         mappings: {
           unsafe: { id: "unsafe", lifecycleState: "ready" },
         },
-        pendingStarts: {},
       }),
     /Mapping unsafe is invalid/,
-  );
-  assert.throws(
-    () =>
-      validateState({
-        schemaVersion: 1,
-        mappings: {},
-        pendingStarts: {
-          unsafe: {
-            operation: "start",
-            manifestDigest: "not-a-digest",
-          },
-        },
-      }),
-    /Pending start/,
   );
 });

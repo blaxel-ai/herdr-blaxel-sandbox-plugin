@@ -23,12 +23,21 @@ export function parsePluginContext(
 }
 
 export function contextCwd(context, fallback = process.cwd()) {
-  return (
-    context.focused_pane_cwd ??
-    context.worktree?.checkout_path ??
-    context.workspace_cwd ??
-    fallback
-  );
+  const focused = context.focused_pane_cwd;
+  const checkout = context.worktree?.checkout_path;
+  if (checkout) {
+    if (focused) {
+      const relative = path.relative(
+        path.resolve(checkout),
+        path.resolve(focused),
+      );
+      if (relative !== ".." && !relative.startsWith(`..${path.sep}`)) {
+        return focused;
+      }
+    }
+    return checkout;
+  }
+  return focused ?? context.workspace_cwd ?? fallback;
 }
 
 export function resolveGitContext(context, options = {}) {

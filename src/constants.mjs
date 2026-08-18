@@ -9,7 +9,6 @@ export const DEFAULT_IMAGE = "blaxel/ts-app:latest";
 export const DEFAULT_MEMORY_MB = 4096;
 export const DEFAULT_IDLE_DELETE = "7d";
 export const MAX_SANDBOX_NAME_LENGTH = 49;
-export const UPLOAD_APPROVAL_WINDOW_MS = 10 * 60 * 1000;
 
 export const LIFECYCLE_STATES = new Set([
   "provisional",

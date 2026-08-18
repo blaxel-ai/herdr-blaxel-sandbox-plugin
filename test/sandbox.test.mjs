@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 
 import { DEFAULT_CONFIG } from "../src/config.mjs";
@@ -40,6 +41,10 @@ test("sandboxNameFor is stable, scoped, and within Blaxel's name limit", () => {
   assert.match(first, /^[a-z0-9-]+$/);
   assert.ok(first.length <= 49);
   assert.notEqual(first, sandboxNameFor({ ...input, sourcePaneId: "pane-2" }));
+  assert.notEqual(
+    first,
+    sandboxNameFor({ ...input, instanceId: "another-sandbox" }),
+  );
 
   const repositoryName = sandboxNameFor({
     prefix: "herdr-demo",
@@ -67,7 +72,7 @@ test("terminalWrapper starts the configured adapter through one tmux session", (
     },
     getAdapter("codex"),
   );
-  assert.match(wrapper, /tmux new-session -A/);
+  assert.match(wrapper, /tmux -u new-session -A/);
   assert.match(wrapper, /codex/);
   assert.match(wrapper, /'\/workspace\/with space'/);
   assert.equal(shellQuote("a'b"), "'a'\"'\"'b'");
@@ -176,11 +181,14 @@ test("provisionSandbox creates the declared sandbox and checked Git baseline", a
         return sandbox;
       },
     });
-    assert.equal(createSpec.name, testMapping().sandboxName);
-    assert.equal(createSpec.image, DEFAULT_CONFIG.image);
-    assert.deepEqual(createSpec.ports, [{ target: 3000, protocol: "HTTP" }]);
+    assert.equal(createSpec.metadata.name, testMapping().sandboxName);
+    assert.equal(createSpec.spec.runtime.image, DEFAULT_CONFIG.image);
+    assert.deepEqual(createSpec.spec.runtime.ports, [
+      { target: 3000, protocol: "HTTP" },
+    ]);
     assert.equal(
-      createSpec.envs.find((entry) => entry.name === "SHELL").value,
+      createSpec.spec.runtime.envs.find((entry) => entry.name === "SHELL")
+        .value,
       "/bin/sh",
     );
     assert.deepEqual(binaryWrites, [["/workspace/README.md", "hello\n"]]);
@@ -188,10 +196,15 @@ test("provisionSandbox creates the declared sandbox and checked Git baseline", a
       textWrites.find(([remotePath]) =>
         remotePath.endsWith("herdr-blaxel-shell"),
       )[1],
-      /tmux new-session -A/,
+      /tmux -u new-session -A/,
     );
     assert.ok(
       requests.some((request) => request.name.startsWith("herdr-setup")),
+    );
+    assert.match(
+      requests.find((request) => request.name.startsWith("herdr-setup"))
+        .command,
+      /trust_level = "trusted"/,
     );
     assert.equal(result.baselineCommit, "a".repeat(40));
     assert.equal(result.installedVersion, "0.147.0");
@@ -249,7 +262,7 @@ test("provisionSandbox fails closed when the installed agent version drifts", as
   }
 });
 
-test("provisionSandbox refuses a file changed after upload approval", async () => {
+test("provisionSandbox refuses a file changed after the Start snapshot", async () => {
   const root = temporaryDirectory();
   try {
     const absolutePath = write(root, "README.md", "changed\n");
@@ -282,6 +295,60 @@ test("provisionSandbox refuses a file changed after upload approval", async () =
   } finally {
     remove(root);
   }
+});
+
+test("provisionSandbox reports a file removed after the Start snapshot cleanly", async () => {
+  const root = temporaryDirectory();
+  try {
+    const absolutePath = write(root, "README.md", "hello\n");
+    const sandbox = {
+      process: {
+        exec: async (request) => ({ pid: request.name }),
+        wait: async () => ({ status: "completed", exitCode: 0 }),
+      },
+      fs: { writeBinary: async () => {}, write: async () => {} },
+    };
+    fs.unlinkSync(absolutePath);
+    await assert.rejects(
+      provisionSandbox({
+        mapping: testMapping(),
+        manifest: {
+          files: [
+            {
+              path: "README.md",
+              absolutePath,
+              sha256:
+                "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03",
+              executable: false,
+            },
+          ],
+        },
+        config: DEFAULT_CONFIG,
+        adapter: getAdapter("codex"),
+        createSandbox: async () => sandbox,
+      }),
+      (error) =>
+        error.code === "upload_manifest_changed" &&
+        /removed after the Start snapshot/.test(error.message),
+    );
+  } finally {
+    remove(root);
+  }
+});
+
+test("terminalWrapper safely appends configured agent arguments", () => {
+  const wrapper = terminalWrapper(testMapping(), getAdapter("codex"), [
+    "--model",
+    "gpt-5.6-terra",
+    "prompt with spaces",
+  ]);
+  assert.match(wrapper, /tmux -u new-session/);
+  assert.ok(
+    wrapper.includes(
+      shellQuote("'codex' '--model' 'gpt-5.6-terra' 'prompt with spaces'"),
+    ),
+  );
+  assert.match(wrapper, /TERM=xterm-256color/);
 });
 
 test("sandbox controls preserve files on stop and expose current state", async () => {

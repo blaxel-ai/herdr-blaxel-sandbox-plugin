@@ -2,7 +2,7 @@
 import readline from "node:readline/promises";
 
 import { loadConfig } from "./config.mjs";
-import { PluginError, emitFailure } from "./result.mjs";
+import { PluginError, errorMessage } from "./result.mjs";
 import { discoverPreviews } from "./sandbox.mjs";
 import { readState } from "./state.mjs";
 
@@ -47,6 +47,8 @@ try {
     prompt.close();
   }
 } catch (error) {
-  emitFailure("previews-pane", error);
+  process.stdout.write(
+    `\nCould not open Blaxel previews: ${errorMessage(error)}\n`,
+  );
   process.exitCode = 1;
 }

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   adapterCapabilities,
+  adapterSecretEnvironment,
+  agentAuthenticationCommand,
   agentInstallCommand,
   getAdapter,
   listAdapters,
@@ -33,8 +35,35 @@ test("adapter capabilities keep authentication inside the sandbox", () => {
       resumeSupported: true,
       authentication: "inside-sandbox",
       hostCredentialCopy: false,
+      secretEnvironment: [],
       herdrDetectionKind: adapter.herdrDetectionKind,
     });
   }
   assert.throws(() => getAdapter("unsupported"), /Unsupported agent/);
+});
+
+test("adapters expose only present provider keys as encrypted environment", () => {
+  assert.deepEqual(
+    adapterSecretEnvironment(getAdapter("codex"), {
+      OPENAI_API_KEY: "test-key",
+      ANTHROPIC_API_KEY: "not-for-codex",
+    }),
+    [{ name: "OPENAI_API_KEY", value: "test-key", secret: true }],
+  );
+  assert.deepEqual(adapterSecretEnvironment(getAdapter("claude-code"), {}), []);
+  assert.deepEqual(
+    adapterSecretEnvironment(getAdapter("opencode"), {
+      OPENAI_API_KEY: "test-key",
+      ANTHROPIC_API_KEY: "not-for-opencode",
+    }),
+    [{ name: "OPENAI_API_KEY", value: "test-key", secret: true }],
+  );
+  assert.match(
+    agentAuthenticationCommand(getAdapter("codex"), ["OPENAI_API_KEY"]),
+    /codex login --with-api-key/,
+  );
+  assert.equal(
+    agentAuthenticationCommand(getAdapter("opencode"), ["OPENAI_API_KEY"]),
+    null,
+  );
 });

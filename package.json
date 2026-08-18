@@ -5,14 +5,13 @@
   "description": "Run coding agents in persistent Blaxel sandboxes from Herdr.",
   "type": "module",
   "scripts": {
-    "check": "npm run format:check && npm run lint && npm run verify:manifest && npm run verify:receipts && npm test",
+    "check": "npm run format:check && npm run lint && npm run verify:manifest && npm test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage",
-    "verify:manifest": "node scripts/verify-manifest.mjs",
-    "verify:receipts": "node scripts/verify-receipts.mjs"
+    "verify:manifest": "node scripts/verify-manifest.mjs"
   },
   "engines": {
     "node": ">=22"
