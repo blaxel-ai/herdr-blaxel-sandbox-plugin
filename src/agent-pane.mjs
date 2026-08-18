@@ -3,11 +3,10 @@ import { spawn } from "node:child_process";
 
 import { getAdapter } from "./adapters.mjs";
 import { loadConfig } from "./config.mjs";
-import { PluginError, emitFailure } from "./result.mjs";
+import { PluginError, errorMessage } from "./result.mjs";
 import { sandboxInfo } from "./sandbox.mjs";
 import { readState, updateState } from "./state.mjs";
 
-const action = "agent-pane";
 let mappingId;
 
 async function waitForDismiss() {
@@ -49,6 +48,7 @@ try {
       ...current,
       remotePaneId: process.env.HERDR_PANE_ID ?? current.remotePaneId,
       lifecycleState: "connected",
+      lastError: null,
       updatedAt: new Date().toISOString(),
     };
     return state;
@@ -85,12 +85,8 @@ try {
     return state;
   });
   if (exitCode !== 0) {
-    emitFailure(
-      action,
-      new PluginError(
-        "bl_connect_failed",
-        `The Blaxel terminal exited with code ${exitCode}.`,
-      ),
+    process.stdout.write(
+      `\nThe Blaxel terminal exited with code ${exitCode}.\n`,
     );
     await waitForDismiss();
   }
@@ -110,7 +106,9 @@ try {
       return state;
     }).catch(() => {});
   }
-  emitFailure(action, error);
+  process.stdout.write(
+    `\nCould not connect to Blaxel: ${errorMessage(error)}\n`,
+  );
   await waitForDismiss();
   process.exitCode = 1;
 }

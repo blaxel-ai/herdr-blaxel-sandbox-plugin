@@ -80,40 +80,6 @@ function validateMapping(id, mapping) {
   }
 }
 
-function validatePendingStart(key, pending) {
-  if (
-    !pending ||
-    typeof pending !== "object" ||
-    Array.isArray(pending) ||
-    !new Set(["start", "replace"]).has(pending.operation) ||
-    !SHA256.test(pending.manifestDigest ?? "") ||
-    !SHA256.test(pending.provisioningFingerprint ?? "") ||
-    !Number.isFinite(pending.createdAt) ||
-    !Number.isFinite(pending.expiresAt) ||
-    pending.expiresAt < pending.createdAt ||
-    !Number.isInteger(pending.fileCount) ||
-    pending.fileCount < 0 ||
-    !Number.isInteger(pending.totalBytes) ||
-    pending.totalBytes < 0
-  ) {
-    throw new PluginError(
-      "invalid_state",
-      `Pending start ${JSON.stringify(key)} is invalid.`,
-    );
-  }
-  if (
-    (pending.operation === "start" &&
-      (!path.isAbsolute(pending.localRoot ?? "") ||
-        !AGENT_KINDS.has(pending.agentKind))) ||
-    (pending.operation === "replace" && !nonEmptyString(pending.mappingId))
-  ) {
-    throw new PluginError(
-      "invalid_state",
-      `Pending start ${JSON.stringify(key)} has an invalid target.`,
-    );
-  }
-}
-
 export function stateDirectory(env = process.env) {
   const directory = env.HERDR_PLUGIN_STATE_DIR;
   if (!directory) {
@@ -129,7 +95,6 @@ export function emptyState() {
   return {
     schemaVersion: STATE_SCHEMA_VERSION,
     mappings: {},
-    pendingStarts: {},
   };
 }
 
@@ -153,21 +118,8 @@ export function validateState(state) {
   ) {
     throw new PluginError("invalid_state", "Plugin mappings are invalid.");
   }
-  if (
-    !state.pendingStarts ||
-    typeof state.pendingStarts !== "object" ||
-    Array.isArray(state.pendingStarts)
-  ) {
-    throw new PluginError(
-      "invalid_state",
-      "Plugin pending starts are invalid.",
-    );
-  }
   for (const [id, mapping] of Object.entries(state.mappings)) {
     validateMapping(id, mapping);
-  }
-  for (const [key, pending] of Object.entries(state.pendingStarts)) {
-    validatePendingStart(key, pending);
   }
   return state;
 }
@@ -310,23 +262,4 @@ export function requireMapping(state, context, options = {}) {
     );
   }
   return mapping;
-}
-
-export function pendingStartKey(localRoot, agentKind) {
-  return `${localRoot}\u0000${agentKind}`;
-}
-
-export function pendingStartMatches(
-  pending,
-  manifestDigest,
-  provisioningFingerprint,
-  now = Date.now(),
-) {
-  return Boolean(
-    pending &&
-    pending.manifestDigest === manifestDigest &&
-    pending.provisioningFingerprint === provisioningFingerprint &&
-    Number.isFinite(pending.expiresAt) &&
-    pending.expiresAt >= now,
-  );
 }

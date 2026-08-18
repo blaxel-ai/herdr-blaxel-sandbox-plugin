@@ -69,9 +69,14 @@ test("validateConfig rejects unknown keys and unsafe shapes", () => {
     /letter or number/,
   );
   assert.throws(
-    () => validateConfig({ uploadApprovalSeconds: 3_601 }),
-    /must not exceed 3600/,
+    () => validateConfig({ uploadApprovalSeconds: 600 }),
+    /Unknown config/,
   );
+  assert.throws(
+    () => validateConfig({ agentArgs: ["--model", 42] }),
+    /non-empty strings/,
+  );
+  assert.throws(() => validateConfig({ autoApprove: true }), /Unknown config/);
 });
 
 test("validateConfig accepts safe exact paths and excluded directories", () => {
@@ -80,10 +85,12 @@ test("validateConfig accepts safe exact paths and excluded directories", () => {
     excludedPaths: ["dist/", "generated/output.json"],
     idleDelete: "12h",
     remoteRoot: "/workspace/packages/app",
+    agentArgs: ["--model", "gpt-5.6-terra"],
   });
   assert.deepEqual(config.allowSensitivePaths, ["fixtures/example.env"]);
   assert.deepEqual(config.excludedPaths, ["dist/", "generated/output.json"]);
   assert.equal(config.remoteRoot, "/workspace/packages/app");
+  assert.deepEqual(config.agentArgs, ["--model", "gpt-5.6-terra"]);
 });
 
 test("loadConfig reads a strict user configuration", () => {

@@ -5,7 +5,12 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { SandboxInstance } from "@blaxel/core";
 
-import { agentInstallCommand, adapterCapabilities } from "./adapters.mjs";
+import {
+  adapterCapabilities,
+  adapterSecretEnvironment,
+  agentAuthenticationCommand,
+  agentInstallCommand,
+} from "./adapters.mjs";
 import {
   DEFAULT_INTERACTIVE_ENV_PATH,
   MAX_SANDBOX_NAME_LENGTH,
@@ -26,13 +31,19 @@ function slug(value) {
     .replace(/-+/g, "-");
 }
 
-export function sandboxNameFor({ prefix, agentKind, localRoot, sourcePaneId }) {
+export function sandboxNameFor({
+  prefix,
+  agentKind,
+  localRoot,
+  sourcePaneId,
+  instanceId,
+}) {
   const prefixPart = slug(prefix).slice(0, 12);
   const agent = slug(agentKind).slice(0, 14);
   const digest = crypto
     .createHash("sha256")
     .update(
-      `${localRoot}\u0000${sourcePaneId ?? "workspace"}\u0000${agentKind}`,
+      `${localRoot}\u0000${sourcePaneId ?? "workspace"}\u0000${agentKind}\u0000${instanceId ?? "stable"}`,
     )
     .digest("hex")
     .slice(0, 10);
@@ -134,17 +145,27 @@ async function execChecked(sandbox, request, options = {}) {
   return finished;
 }
 
-function setupCommand(adapter) {
-  return [
+function setupCommand(adapter, secretNames, mapping) {
+  const commands = [
     "set -eu",
-    "if ! command -v git >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1; then",
-    "  if command -v apk >/dev/null 2>&1; then apk add --no-cache git tmux;",
-    "  elif command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git tmux;",
-    "  elif command -v dnf >/dev/null 2>&1; then dnf install -y git tmux;",
-    "  else echo 'A supported package manager is required to install git and tmux.' >&2; exit 1; fi",
+    "if ! command -v git >/dev/null 2>&1 || ! command -v tmux >/dev/null 2>&1 || ! command -v bwrap >/dev/null 2>&1; then",
+    "  if command -v apk >/dev/null 2>&1; then apk add --no-cache git tmux bubblewrap;",
+    "  elif command -v apt-get >/dev/null 2>&1; then DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git tmux bubblewrap;",
+    "  elif command -v dnf >/dev/null 2>&1; then dnf install -y git tmux bubblewrap;",
+    "  else echo 'A supported package manager is required to install git, tmux, and bubblewrap.' >&2; exit 1; fi",
     "fi",
     agentInstallCommand(adapter),
-  ].join("\n");
+  ];
+  const authenticate = agentAuthenticationCommand(adapter, secretNames);
+  if (authenticate) commands.push(authenticate);
+  if (adapter.kind === "codex") {
+    const trustedProject = `[projects.${JSON.stringify(remoteWorkingDirectory(mapping))}]\ntrust_level = "trusted"\n`;
+    commands.push(
+      'mkdir -p "$HOME/.codex"',
+      `printf '%s' ${shellQuote(trustedProject)} > "$HOME/.codex/config.toml"`,
+    );
+  }
+  return commands.join("\n");
 }
 
 export function remoteWorkingDirectory(mapping) {
@@ -153,11 +174,11 @@ export function remoteWorkingDirectory(mapping) {
     : mapping.remoteRoot;
 }
 
-export function terminalWrapper(mapping, adapter) {
+export function terminalWrapper(mapping, adapter, agentArgs = []) {
   const tmuxSession = tmuxSessionFor(mapping);
-  const command = adapter.launch.map(shellQuote).join(" ");
+  const command = [...adapter.launch, ...agentArgs].map(shellQuote).join(" ");
   const workingDirectory = remoteWorkingDirectory(mapping);
-  return `#!/bin/sh\nset -eu\nexport HERDR_AGENT=${shellQuote(adapter.herdrDetectionKind)}\ncd ${shellQuote(workingDirectory)}\nexec tmux new-session -A -s ${shellQuote(tmuxSession)} -c ${shellQuote(workingDirectory)} ${shellQuote(command)}\n`;
+  return `#!/bin/sh\nset -eu\nexport HERDR_AGENT=${shellQuote(adapter.herdrDetectionKind)}\nexport TERM=xterm-256color\nexport COLORTERM=truecolor\ncd ${shellQuote(workingDirectory)}\nexec tmux -u new-session -A -s ${shellQuote(tmuxSession)} -c ${shellQuote(workingDirectory)} ${shellQuote(command)}\n`;
 }
 
 export function interactiveShellBootstrap() {
@@ -202,12 +223,23 @@ async function uploadFiles(sandbox, mapping, manifest) {
       if (current >= manifest.files.length) return;
       const file = manifest.files[current];
       const remotePath = path.posix.join(mapping.remoteRoot, file.path);
-      const content = fs.readFileSync(file.absolutePath);
+      let content;
+      try {
+        content = fs.readFileSync(file.absolutePath);
+      } catch (error) {
+        if (error.code === "ENOENT") {
+          throw new PluginError(
+            "upload_manifest_changed",
+            `${file.path} was removed after the Start snapshot.`,
+          );
+        }
+        throw error;
+      }
       const digest = crypto.createHash("sha256").update(content).digest("hex");
       if (digest !== file.sha256) {
         throw new PluginError(
           "upload_manifest_changed",
-          `${file.path} changed after approval.`,
+          `${file.path} changed after the Start snapshot.`,
         );
       }
       await sandbox.fs.writeBinary(remotePath, content);
@@ -316,30 +348,47 @@ export async function provisionSandbox({
   createSandbox = (spec) => SandboxInstance.createIfNotExists(spec),
 }) {
   selectWorkspace(mapping.blaxelWorkspace ?? config.workspace);
+  const providerSecrets = adapterSecretEnvironment(adapter);
+  const secretNames = providerSecrets.map(({ name }) => name);
   await onLifecycle?.("creating");
   const sandbox = await createSandbox({
-    name: mapping.sandboxName,
-    image: config.image,
-    memory: config.memory,
-    region: config.region ?? undefined,
-    ttl: config.idleDelete,
-    ports: config.previewPorts.map((target) => ({ target, protocol: "HTTP" })),
-    envs: [
-      { name: "SHELL", value: "/bin/sh" },
-      { name: "ENV", value: DEFAULT_INTERACTIVE_ENV_PATH },
-      { name: "HERDR_BLAXEL_AGENT_KIND", value: mapping.agentKind },
-      { name: "HERDR_BLAXEL_REMOTE_ROOT", value: mapping.remoteRoot },
-    ],
-    labels: {
-      integration: "herdr",
-      agent: mapping.agentKind,
-      mapping: mapping.id,
+    metadata: {
+      name: mapping.sandboxName,
+      labels: {
+        integration: "herdr",
+        agent: mapping.agentKind,
+        mapping: mapping.id,
+      },
+    },
+    spec: {
+      ...(config.region ? { region: config.region } : {}),
+      runtime: {
+        image: config.image,
+        memory: config.memory,
+        ttl: config.idleDelete,
+        ports: config.previewPorts.map((target) => ({
+          target,
+          protocol: "HTTP",
+        })),
+        envs: [
+          { name: "SHELL", value: "/bin/sh" },
+          { name: "ENV", value: DEFAULT_INTERACTIVE_ENV_PATH },
+          { name: "TERM", value: "xterm-256color" },
+          { name: "COLORTERM", value: "truecolor" },
+          { name: "HERDR_BLAXEL_AGENT_KIND", value: mapping.agentKind },
+          { name: "HERDR_BLAXEL_REMOTE_ROOT", value: mapping.remoteRoot },
+          ...providerSecrets,
+        ],
+      },
     },
   });
   await onLifecycle?.("uploading");
   await uploadFiles(sandbox, mapping, manifest);
   await onLifecycle?.("preparing");
-  await sandbox.fs.write(DEFAULT_SHELL_PATH, terminalWrapper(mapping, adapter));
+  await sandbox.fs.write(
+    DEFAULT_SHELL_PATH,
+    terminalWrapper(mapping, adapter, config.agentArgs),
+  );
   await sandbox.fs.write(
     DEFAULT_INTERACTIVE_ENV_PATH,
     interactiveShellBootstrap(),
@@ -348,7 +397,7 @@ export async function provisionSandbox({
     sandbox,
     {
       name: `herdr-setup-${mapping.id.slice(0, 8)}`,
-      command: setupCommand(adapter),
+      command: setupCommand(adapter, secretNames, mapping),
       workingDir: "/",
     },
     { maxWait: 10 * 60 * 1000 },
@@ -368,7 +417,7 @@ export async function provisionSandbox({
     sandbox,
     baselineCommit,
     installedVersion,
-    capabilities: adapterCapabilities(adapter),
+    capabilities: adapterCapabilities(adapter, secretNames),
   };
 }
 
@@ -466,6 +515,9 @@ export async function sandboxInfo(mapping, options = {}) {
     status: sandbox.status,
     region: sandbox.spec?.region ?? null,
     image: sandbox.spec?.runtime?.image ?? null,
+    ttl: sandbox.spec?.runtime?.ttl ?? null,
+    createdAt: sandbox.metadata?.createdAt ?? null,
+    updatedAt: sandbox.metadata?.updatedAt ?? null,
     previews: previews.map((preview) => ({
       name: preview.name,
       url: preview.spec?.url ?? null,

@@ -6,12 +6,12 @@ import {
   DEFAULT_IMAGE,
   DEFAULT_MEMORY_MB,
   DEFAULT_REMOTE_ROOT,
-  UPLOAD_APPROVAL_WINDOW_MS,
 } from "./constants.mjs";
 import { PluginError } from "./result.mjs";
 
 export const DEFAULT_CONFIG = Object.freeze({
   agent: "codex",
+  agentArgs: [],
   workspace: null,
   region: null,
   image: DEFAULT_IMAGE,
@@ -26,7 +26,6 @@ export const DEFAULT_CONFIG = Object.freeze({
   maxFiles: 10_000,
   maxFileBytes: 10 * 1024 * 1024,
   maxUploadBytes: 100 * 1024 * 1024,
-  uploadApprovalSeconds: UPLOAD_APPROVAL_WINDOW_MS / 1000,
 });
 
 const ALLOWED_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
@@ -119,6 +118,7 @@ export function validateConfig(candidate) {
       `agent must be one of: ${[...AGENTS].join(", ")}.`,
     );
   }
+  requireStringArray(config.agentArgs, "agentArgs");
   requireString(config.workspace, "workspace", { nullable: true });
   requireString(config.region, "region", { nullable: true });
   requireString(config.image, "image");
@@ -141,13 +141,6 @@ export function validateConfig(candidate) {
   requirePositiveInteger(config.maxFiles, "maxFiles");
   requirePositiveInteger(config.maxFileBytes, "maxFileBytes");
   requirePositiveInteger(config.maxUploadBytes, "maxUploadBytes");
-  requirePositiveInteger(config.uploadApprovalSeconds, "uploadApprovalSeconds");
-  if (config.uploadApprovalSeconds > 3_600) {
-    throw new PluginError(
-      "invalid_config",
-      "uploadApprovalSeconds must not exceed 3600.",
-    );
-  }
   if (
     !Array.isArray(config.previewPorts) ||
     !config.previewPorts.every(

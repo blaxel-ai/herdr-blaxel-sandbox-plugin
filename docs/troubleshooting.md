@@ -22,9 +22,9 @@ bl workspaces
 
 Set `workspace` in `config.json` when the default workspace is not correct.
 
-## Start shows another upload preview
+## Start says the snapshot changed
 
-The target, file digest, or ten-minute approval changed. Review the new target and list, then run Start again.
+The target, file digest, or source pane changed between preparation and the first remote write. Run Start again.
 
 ## A safe file is excluded
 
@@ -48,7 +48,7 @@ The plugin uses the Debian-based `blaxel/ts-app:latest` image for all three adap
 
 ## Reconnect says the Sandbox is missing
 
-The Sandbox expired or someone deleted it. Use Replace to create a new Sandbox from a fresh approved upload.
+The Sandbox expired or someone deleted it. Use Replace to create a new Sandbox from a fresh filtered upload.
 
 ## Apply reports a conflict
 

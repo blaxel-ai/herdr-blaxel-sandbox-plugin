@@ -1,6 +1,6 @@
 # Keybindings
 
-Herdr's action picker exposes every plugin action without extra setup. Add keybindings only for the actions you use frequently.
+Every plugin action is available through `herdr plugin action invoke`. Add keybindings only for the actions you use frequently.
 
 Add this example to your Herdr configuration:
 
@@ -38,3 +38,5 @@ herdr server reload-config
 ```
 
 See the [Herdr keybinding documentation](https://herdr.dev/docs/configuration/#keybindings) for configuration locations and more examples.
+
+The dashboard is the complete management surface. Run `sbx list` if you installed the optional function from the README, select with arrows or `j`/`k`, then use `Enter`/`c` to connect, `n` to create another Sandbox for the selected repository, `a` to Apply, `i` for info, `l` for logs, `p` for previews, `s` to stop, `x` to replace, `d` to delete, `r` to refresh, and `q` to close.

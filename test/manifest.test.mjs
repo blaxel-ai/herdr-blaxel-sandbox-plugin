@@ -5,10 +5,10 @@ import test from "node:test";
 import { DEFAULT_CONFIG } from "../src/config.mjs";
 import { getAdapter } from "../src/adapters.mjs";
 import {
-  approvalFingerprint,
   buildUploadManifest,
   formatManifest,
   pathExclusionReason,
+  startSnapshotFingerprint,
 } from "../src/manifest.mjs";
 import { runSync } from "../src/process.mjs";
 import { makeGitRepository, remove, write } from "./helpers.mjs";
@@ -68,6 +68,29 @@ test("buildUploadManifest includes safe files and excludes tracked secrets", () 
   }
 });
 
+test("buildUploadManifest ignores tracked files deleted from the worktree", () => {
+  const root = makeGitRepository();
+  try {
+    const removed = write(root, "removed.txt", "remove me\n");
+    runSync("git", ["add", "removed.txt"], { cwd: root });
+    runSync("git", ["commit", "-qm", "add removed file"], { cwd: root });
+    fs.unlinkSync(removed);
+
+    const manifest = buildUploadManifest(root, DEFAULT_CONFIG);
+
+    assert.equal(
+      manifest.files.some(({ path }) => path === "removed.txt"),
+      false,
+    );
+    assert.deepEqual(
+      manifest.excluded.find(({ path }) => path === "removed.txt"),
+      { path: "removed.txt", reason: "deleted" },
+    );
+  } finally {
+    remove(root);
+  }
+});
+
 test("buildUploadManifest enforces file and total size limits", () => {
   const root = makeGitRepository();
   try {
@@ -103,16 +126,16 @@ test("buildUploadManifest scans the complete allowed text file for secrets", () 
   }
 });
 
-test("approvalFingerprint changes with the provisioning target", () => {
+test("startSnapshotFingerprint changes with the provisioning target", () => {
   const adapter = getAdapter("codex");
-  const first = approvalFingerprint({
+  const first = startSnapshotFingerprint({
     config: DEFAULT_CONFIG,
     adapter,
     workspace: "main",
   });
   assert.equal(
     first,
-    approvalFingerprint({
+    startSnapshotFingerprint({
       config: DEFAULT_CONFIG,
       adapter,
       workspace: "main",
@@ -120,7 +143,7 @@ test("approvalFingerprint changes with the provisioning target", () => {
   );
   assert.notEqual(
     first,
-    approvalFingerprint({
+    startSnapshotFingerprint({
       config: { ...DEFAULT_CONFIG, publicPreviews: true },
       adapter,
       workspace: "main",
@@ -128,7 +151,15 @@ test("approvalFingerprint changes with the provisioning target", () => {
   );
   assert.notEqual(
     first,
-    approvalFingerprint({
+    startSnapshotFingerprint({
+      config: { ...DEFAULT_CONFIG, agentArgs: ["--model", "example"] },
+      adapter,
+      workspace: "main",
+    }),
+  );
+  assert.notEqual(
+    first,
+    startSnapshotFingerprint({
       config: DEFAULT_CONFIG,
       adapter,
       workspace: "another-workspace",
@@ -136,7 +167,7 @@ test("approvalFingerprint changes with the provisioning target", () => {
   );
 });
 
-test("formatManifest shows the exact visible target and approval window", () => {
+test("formatManifest shows the exact visible target without a prompt", () => {
   const output = formatManifest(
     {
       files: [],
@@ -149,6 +180,8 @@ test("formatManifest shows the exact visible target and approval window", () => 
         sandboxName: "herdr-codex-example",
         workspace: "workspace-1",
         agent: "Codex 0.147.0",
+        agentArgs: ["--model", "example"],
+        secretEnvironment: ["OPENAI_API_KEY"],
         image: "blaxel/ts-app:latest",
         region: "us-pdx-1",
         memory: 4096,
@@ -157,11 +190,12 @@ test("formatManifest shows the exact visible target and approval window", () => 
         previewPorts: [3000, 5173],
         publicPreviews: false,
       },
-      approvalSeconds: 90,
     },
   );
   assert.match(output, /Sandbox: herdr-codex-example/);
   assert.match(output, /Remote root: \/workspace/);
+  assert.match(output, /Agent arguments: --model example/);
+  assert.match(output, /Encrypted provider secrets: OPENAI_API_KEY/);
   assert.match(output, /Previews: private on 3000, 5173/);
-  assert.match(output, /within 90 seconds/);
+  assert.doesNotMatch(output, /Press Enter|approve/);
 });

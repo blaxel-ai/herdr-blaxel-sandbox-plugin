@@ -18,7 +18,7 @@ command = ["node", "src/action.mjs"]
 [[actions]]
 id = "start-agent"
 title = "Start configured agent in Blaxel"
-description = "Preview the filtered upload, then start one persistent Blaxel sandbox on the matching second invocation."
+description = "Immediately create a Sandbox from the focused Git worktree and open the configured agent."
 contexts = ["workspace", "pane"]
 command = ["node", "src/action.mjs"]
 
@@ -32,28 +32,28 @@ command = ["node", "src/action.mjs"]
 [[actions]]
 id = "apply-changes"
 title = "Apply Blaxel changes locally"
-description = "Download the next binary Git patch and apply it only after git apply --check succeeds."
+description = "Review a checked remote Git patch, then approve it before changing the local worktree."
 contexts = ["pane"]
 command = ["node", "src/action.mjs"]
 
 [[actions]]
 id = "stop"
 title = "Stop Blaxel agent"
-description = "Stop the remote agent session while preserving the sandbox filesystem."
+description = "Open a visible stop operation that preserves the Sandbox filesystem."
 contexts = ["pane"]
 command = ["node", "src/action.mjs"]
 
 [[actions]]
 id = "info"
 title = "Show Blaxel mapping"
-description = "Show the mapped sandbox, agent, lifecycle, paths, and previews."
+description = "Open a readable view of the mapped Sandbox, agent, lifecycle, paths, and previews."
 contexts = ["pane"]
 command = ["node", "src/action.mjs"]
 
 [[actions]]
 id = "logs"
 title = "Show Blaxel agent output"
-description = "Capture recent output from the persistent remote agent terminal."
+description = "Open recent output from the persistent remote agent terminal."
 contexts = ["pane"]
 command = ["node", "src/action.mjs"]
 
@@ -86,10 +86,24 @@ contexts = ["pane"]
 command = ["node", "src/action.mjs"]
 
 [[panes]]
+id = "start"
+title = "Start in Blaxel"
+placement = "split"
+command = ["node", "src/start-pane.mjs"]
+
+[[panes]]
 id = "agent"
 title = "Blaxel agent"
 placement = "split"
 command = ["node", "src/agent-pane.mjs"]
+
+[[panes]]
+id = "operation"
+title = "Blaxel Sandbox"
+placement = "popup"
+width = "88%"
+height = "80%"
+command = ["node", "src/operation-pane.mjs"]
 
 [[panes]]
 id = "blaxel-login"
@@ -115,8 +129,8 @@ command = ["node", "src/previews-pane.mjs"]
 
 [[panes]]
 id = "confirmation"
-title = "Confirm Blaxel sandbox deletion"
+title = "Confirm Blaxel Sandbox change"
 placement = "popup"
-width = "72%"
-height = "55%"
+width = "92%"
+height = "88%"
 command = ["node", "src/confirmation-pane.mjs"]

@@ -1,7 +1,0 @@
-PASS each of the three full-lifecycle test Sandboxes required its own typed DELETE and reached disabled TERMINATED state.
-PASS a separate minimal Sandbox exercised the final deletion-readback code and returned status TERMINATED.
-PASS no active Sandbox with the full-lifecycle test label remained in the workspace listing.
-PASS plugin state contained zero mappings and zero pending starts after cleanup.
-PASS the nine unrelated active Sandboxes observed before cleanup remained active and were not targeted.
-NOTE Blaxel retains deleted resources as disabled TERMINATED records for platform retention; they are omitted from the active listing.
-PASS no public repository, commit, remote, push, pull request, tag, release, merge, deployment, or publication was created.
