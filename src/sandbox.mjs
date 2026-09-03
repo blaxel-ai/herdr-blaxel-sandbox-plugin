@@ -5,6 +5,8 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { SandboxInstance } from "@blaxel/core";
 
+import "./integration-user-agent.mjs";
+
 import {
   adapterCapabilities,
   adapterSecretEnvironment,
