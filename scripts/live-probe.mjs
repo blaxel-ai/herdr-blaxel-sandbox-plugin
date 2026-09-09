@@ -138,8 +138,10 @@ http.createServer((request, response) => {
       "PASS private preview: anonymous denied, token 200, totals and headers correct, unknown route 404",
     );
   } else if (operation === "session" || operation === "reconnected") {
+    // Herdr can show the launch banner before bl connect has created tmux.
+    const session = shellQuote(tmuxSessionFor(mapping));
     const identity = await exec(
-      `tmux display-message -p -t ${shellQuote(tmuxSessionFor(mapping))} '#{session_id}:#{session_created}:#{pane_pid}'`,
+      `attempts=0; until tmux has-session -t ${session} 2>/dev/null; do attempts=$((attempts + 1)); [ "$attempts" -lt 60 ] || exit 1; sleep 0.5; done; tmux display-message -p -t ${session} '#{session_id}:#{session_created}:#{pane_pid}'`,
     );
     const proof = path.join(
       process.env.HERDR_PLUGIN_STATE_DIR,
