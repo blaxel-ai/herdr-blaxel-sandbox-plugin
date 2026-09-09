@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { exportAndApplyPatch } from "../src/patch.mjs";
+import { exportAndApplyPatch, MAX_PATCH_BYTES } from "../src/patch.mjs";
 import { runSync } from "../src/process.mjs";
 import { makeGitRepository, remove, write } from "./helpers.mjs";
 
@@ -11,12 +11,13 @@ function fakeSandbox(patch) {
     process: {
       exec: async () => ({
         status: "completed",
-        stdout: "a".repeat(40),
+        stdout: `${"a".repeat(40)}\n${Buffer.byteLength(patch)}`,
         exitCode: 0,
       }),
     },
     fs: {
       readBinary: async () => new Blob([patch]),
+      rm: async () => {},
     },
   };
 }
@@ -82,4 +83,52 @@ test("exportAndApplyPatch refuses a conflicting local tree", async () => {
   } finally {
     remove(root);
   }
+});
+
+test("oversized patches are refused before download or local apply", async () => {
+  const sandbox = fakeSandbox("");
+  sandbox.process.exec = async () => ({
+    status: "completed",
+    exitCode: 0,
+    stdout: `${"a".repeat(40)}\n${MAX_PATCH_BYTES + 1}`,
+  });
+  sandbox.fs.readBinary = async () => {
+    assert.fail("must not download oversized patch");
+  };
+  await assert.rejects(
+    exportAndApplyPatch(mapping("/unused"), {
+      getSandbox: async () => sandbox,
+    }),
+    (error) => error.code === "patch_too_large",
+  );
+});
+
+test("changed patch size is refused before local apply", async () => {
+  const sandbox = fakeSandbox("old");
+  sandbox.fs.readBinary = async () => new Blob(["changed"]);
+  await assert.rejects(
+    exportAndApplyPatch(mapping("/unused"), {
+      getSandbox: async () => sandbox,
+    }),
+    (error) => error.code === "patch_changed",
+  );
+});
+
+test("each export uses its own remote patch file and removes it afterward", async () => {
+  const paths = [],
+    removed = [];
+  const sandbox = fakeSandbox("");
+  sandbox.fs.readBinary = async (path) => {
+    paths.push(path);
+    return new Blob([]);
+  };
+  sandbox.fs.rm = async (path) => {
+    removed.push(path);
+  };
+  for (let i = 0; i < 2; i++)
+    await exportAndApplyPatch(mapping("/unused"), {
+      getSandbox: async () => sandbox,
+    });
+  assert.notEqual(paths[0], paths[1]);
+  assert.deepEqual(removed, paths);
 });

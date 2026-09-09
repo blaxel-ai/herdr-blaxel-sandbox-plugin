@@ -86,7 +86,7 @@ test("terminalWrapper starts the configured adapter through one tmux session", (
     },
     getAdapter("codex"),
   );
-  assert.match(wrapper, /tmux -u new-session -A/);
+  assert.match(wrapper, /tmux -u -T RGB new-session -A/);
   assert.match(wrapper, /codex/);
   assert.match(wrapper, /'\/workspace\/with space'/);
   assert.equal(shellQuote("a'b"), "'a'\"'\"'b'");
@@ -210,7 +210,7 @@ test("provisionSandbox creates the declared sandbox and checked Git baseline", a
       textWrites.find(([remotePath]) =>
         remotePath.endsWith("herdr-blaxel-shell"),
       )[1],
-      /tmux -u new-session -A/,
+      /tmux -u -T RGB new-session -A/,
     );
     assert.ok(
       requests.some((request) => request.name.startsWith("herdr-setup")),
@@ -356,7 +356,7 @@ test("terminalWrapper safely appends configured agent arguments", () => {
     "gpt-5.6-terra",
     "prompt with spaces",
   ]);
-  assert.match(wrapper, /tmux -u new-session/);
+  assert.match(wrapper, /tmux -u -T RGB new-session/);
   assert.ok(
     wrapper.includes(
       shellQuote("'codex' '--model' 'gpt-5.6-terra' 'prompt with spaces'"),
@@ -492,4 +492,43 @@ test("discoverPreviews reconciles access and limits tokens to the caller", async
   assert.equal(previews[0].temporaryUrl.includes("temporary"), true);
   assert.equal(previews[0].public, false);
   assert.equal(previews[1].available, false);
+});
+
+test("Stop does not report success for failed or unfinished remote commands", async () => {
+  for (const result of [
+    { status: "failed", exitCode: 1 },
+    { status: "running" },
+  ]) {
+    await assert.rejects(
+      stopAgent(testMapping(), {
+        getSandbox: async () => ({ process: { exec: async () => result } }),
+      }),
+      (error) => error.code === "agent_stop_failed",
+    );
+  }
+});
+
+test("terminal login checks the selected workspace without exposing credential output", async () => {
+  const { verifyTerminalLogin } = await import("../src/sandbox.mjs");
+  const runCommand = (command, args, options) => {
+    assert.equal(command, "bl");
+    assert.deepEqual(args, ["token", "test-workspace"]);
+    assert.equal(options.check, false);
+    return { status: 0, stdout: "test-credential", stderr: "" };
+  };
+  assert.equal(
+    verifyTerminalLogin("test-workspace", { runCommand }),
+    undefined,
+  );
+  for (const result of [
+    { status: 1, stdout: "test-credential", stderr: "test-credential" },
+    { status: 0, stdout: "", stderr: "" },
+  ]) {
+    assert.throws(
+      () => verifyTerminalLogin("test-workspace", { runCommand: () => result }),
+      (error) =>
+        error.code === "blaxel_login_required" &&
+        !error.message.includes("test-credential"),
+    );
+  }
 });

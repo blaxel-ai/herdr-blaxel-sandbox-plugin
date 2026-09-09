@@ -17,7 +17,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@blaxel/core": "0.3.11"
+    "@blaxel/core": "0.3.11",
+    "string-width": "8.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
@@ -36,7 +37,8 @@
     "sandbox",
     "codex",
     "claude-code",
-    "opencode"
+    "opencode",
+    "pi"
   ],
   "repository": {
     "type": "git",

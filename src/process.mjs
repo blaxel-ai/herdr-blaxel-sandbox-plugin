@@ -35,3 +35,7 @@ export function runSync(command, args = [], options = {}) {
     stderr: String(result.stderr ?? ""),
   };
 }
+
+export function shellQuote(value) {
+  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+}

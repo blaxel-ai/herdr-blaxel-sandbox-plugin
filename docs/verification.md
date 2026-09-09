@@ -1,5 +1,7 @@
 # Verification
 
+See the [2026-09-09 local verification record](verification-2026-09-09.md) for the four-tool model-task results and remaining publication gates.
+
 ## Local checks
 
 Run from the repository root:
@@ -50,9 +52,9 @@ python3 scripts/herdr-smoke.py --herdr /tmp/herdr-current/herdr --live
 
 Add `--install-ref <full-40-character-commit>` to verify a fresh GitHub installation and its install-time `npm ci --omit=dev` build. The commit must already be pushed. Without this flag, the test links the current local checkout.
 
-The automated test launches pinned Codex in real Herdr, verifies the same remote tmux identity after disconnect/reconnect, makes a deterministic invoice edit, checks the private preview with and without a token, verifies an unknown route, exercises canceled/conflicting/approved/repeated Apply, checks Stop preserves files, and exercises incorrect/correct typed deletion. Operation panes use split placement so headless Herdr can expose their terminal contents; the same production pane entrypoints handle approval and deletion. Preview terminal contents and bearer URLs are never printed. Cleanup runs in `finally`; sandboxes also have a 30-minute idle TTL. Interrupted cleanup must be treated as a failed run and checked in the test workspace before retrying.
+The automated test launches the selected pinned coding tool in real Herdr, verifies the same remote tmux identity after disconnect/reconnect, makes a deterministic invoice edit, checks the private preview with and without a token, verifies an unknown route, exercises canceled/conflicting/approved/repeated Apply, checks Stop preserves files, and exercises incorrect/correct typed deletion. Operation panes use split placement so headless Herdr can expose their terminal contents; the same production pane entrypoints handle approval and deletion. Preview terminal contents and bearer URLs are never printed. Cleanup runs in `finally`; sandboxes also have a 30-minute idle TTL. Interrupted cleanup must be treated as a failed run and checked in the test workspace before retrying.
 
-This smoke test deliberately removes model-provider keys and does not make a model call. It verifies the plugin lifecycle and Codex launch, including its sign-in screen. A real prompted tutorial walkthrough and checks for the other agent adapters remain separate release evidence.
+This smoke test deliberately removes model-provider keys and does not make a model call. It verifies the plugin lifecycle and Codex launch, including its sign-in screen. Add `--agent codex`, `--agent claude-code`, `--agent opencode`, or `--agent pi` to choose the tool. The scheduled live matrix covers all four, without model calls.
 
 ### Scheduled live test setup
 
@@ -82,3 +84,17 @@ Verify:
 12. Final cleanup deletes only the named test Sandboxes, verifies each is missing or `TERMINATED`, and leaves no plugin mapping.
 
 Do not claim an adapter or lifecycle passes until the current run records every required phase and cleanup result. Keep credentials, workspace identity, Sandbox names, private URLs, absolute local paths, and repository contents out of public evidence.
+
+## Real coding-tool task
+
+Add `--model-test` to a live walkthrough to have the selected tool make an actual file edit through its interactive Herdr terminal. Supply the tool's approved provider key through process environment only. The probe waits for the file, executes the exported function, and runs the example tests before proceeding through reconnect, preview, reviewed Apply, Stop, and deletion. The harness handles the native Claude Code setup prompts only for its disposable fixture. It does not copy host coding-tool credentials.
+
+For example, with an approved OpenAI key in the environment:
+
+```bash
+python3 scripts/herdr-smoke.py --herdr /tmp/herdr-current/herdr --live --agent pi --model-test --agent-args '["--provider","openai","--model","gpt-5.4-mini","--thinking","low"]'
+```
+
+Keep the corresponding pass/failure and cleanup record for each tool. A successful model request alone does not establish the rest of the lifecycle. A local checkout walkthrough does not establish a fresh GitHub installation of an unpublished change.
+
+The terminal UI tests verify dimming, focus capture/restoration, scrolling, Unicode column widths, and stripping terminal control sequences from untrusted content. The real Herdr smoke also opens and dismisses the tool chooser.

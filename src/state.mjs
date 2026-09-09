@@ -4,8 +4,9 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { LIFECYCLE_STATES, STATE_SCHEMA_VERSION } from "./constants.mjs";
 import { PluginError } from "./result.mjs";
+import { AGENT_KINDS } from "./adapters.mjs";
 
-const AGENT_KINDS = new Set(["codex", "claude-code", "opencode"]);
+const agents = new Set(AGENT_KINDS);
 const SANDBOX_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const GIT_COMMIT = /^[0-9a-f]{40}$/;
@@ -36,7 +37,7 @@ function validateMapping(id, mapping) {
     Array.isArray(mapping) ||
     mapping.schemaVersion !== STATE_SCHEMA_VERSION ||
     mapping.id !== id ||
-    !AGENT_KINDS.has(mapping.agentKind) ||
+    !agents.has(mapping.agentKind) ||
     !nullableString(mapping.sourcePaneId) ||
     !nullableString(mapping.remotePaneId) ||
     !nonEmptyString(mapping.blaxelWorkspace) ||

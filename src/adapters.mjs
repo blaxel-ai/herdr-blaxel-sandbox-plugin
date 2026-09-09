@@ -1,4 +1,5 @@
 import { PluginError } from "./result.mjs";
+import { shellQuote } from "./process.mjs";
 
 const ADAPTERS = Object.freeze({
   codex: Object.freeze({
@@ -10,6 +11,10 @@ const ADAPTERS = Object.freeze({
     expectedVersion: "0.147.0",
     herdrDetectionKind: "codex",
     secretEnvironment: ["OPENAI_API_KEY"],
+    configure: (workingDirectory) => [
+      'mkdir -p "$HOME/.codex"',
+      `printf '%s' ${shellQuote(`[projects.${JSON.stringify(workingDirectory)}]\ntrust_level = "trusted"\n`)} > "$HOME/.codex/config.toml"`,
+    ],
   }),
   "claude-code": Object.freeze({
     kind: "claude-code",
@@ -29,9 +34,24 @@ const ADAPTERS = Object.freeze({
     versionCommand: "opencode --version",
     expectedVersion: "1.14.48",
     herdrDetectionKind: "opencode",
-    secretEnvironment: ["OPENAI_API_KEY"],
+    secretEnvironment: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
+  }),
+  pi: Object.freeze({
+    kind: "pi",
+    title: "Pi",
+    package: "@mariozechner/pi-coding-agent@0.73.1",
+    // Keep transitive ranges on the verified snapshot, including AWS SDK packages.
+    installBefore: "2026-09-09T18:00:00Z",
+    launch: ["pi"],
+    versionCommand: "pi --version",
+    expectedVersion: "0.73.1",
+    herdrDetectionKind: "pi",
+    environment: [{ name: "PI_SKIP_VERSION_CHECK", value: "1" }],
+    secretEnvironment: ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
   }),
 });
+
+export const AGENT_KINDS = Object.freeze(Object.keys(ADAPTERS));
 
 export function listAdapters() {
   return Object.values(ADAPTERS);
@@ -46,7 +66,10 @@ export function getAdapter(kind) {
 }
 
 export function agentInstallCommand(adapter) {
-  return `npm install --global --no-audit --no-fund ${adapter.package}`;
+  const before = adapter.installBefore
+    ? ` --before=${shellQuote(adapter.installBefore)}`
+    : "";
+  return `npm install --global --no-audit --no-fund${before} ${adapter.package}`;
 }
 
 export function adapterSecretEnvironment(adapter, env = process.env) {
@@ -76,4 +99,12 @@ export function adapterCapabilities(adapter, secretNames = []) {
     secretEnvironment: secretNames,
     herdrDetectionKind: adapter.herdrDetectionKind,
   };
+}
+
+export function agentSetupCommands(adapter, secretNames, workingDirectory) {
+  const authentication = agentAuthenticationCommand(adapter, secretNames);
+  return [
+    ...(authentication ? [authentication] : []),
+    ...(adapter.configure?.(workingDirectory) ?? []),
+  ];
 }

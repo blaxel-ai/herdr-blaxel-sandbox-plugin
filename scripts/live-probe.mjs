@@ -57,7 +57,24 @@ if (operation === "cleanup") {
     );
     return String(result.stdout ?? "").trim();
   };
-  if (operation === "edit") {
+  if (operation === "model") {
+    const marker = `herdr-${mapping.agentKind}-verified`;
+    const deadline = Date.now() + 120_000;
+    let source = "";
+    while (Date.now() < deadline) {
+      source = await sandbox.fs.read(`${mapping.remoteRoot}/invoices.mjs`);
+      if (source.includes(marker)) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    assert.ok(source.includes(marker), "model did not edit the fixture");
+    await exec(
+      `node --input-type=module -e ${shellQuote(`import { integrationProof } from './invoices.mjs'; if (integrationProof() !== ${JSON.stringify(marker)}) process.exit(1);`)}`,
+    );
+    await exec("npm test");
+    console.log(
+      `PASS ${mapping.agentKind} model task: real file edit, exported function and repository tests`,
+    );
+  } else if (operation === "edit") {
     const file = `${mapping.remoteRoot}/invoices.mjs`;
     const source = await sandbox.fs.read(file);
     assert.ok(source.includes("export function summarize(rows)"));

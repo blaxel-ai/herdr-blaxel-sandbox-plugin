@@ -39,6 +39,14 @@ export function missingMappingsToPrune(
     if (!activeIds.has(id)) counts.delete(id);
   }
   for (const mapping of mappings) {
+    if (
+      !["ready", "connected", "stopped", "missing", "failed"].includes(
+        mapping.lifecycleState,
+      )
+    ) {
+      counts.delete(mapping.id);
+      continue;
+    }
     const remote = remoteCache.get(mapping.id);
     if (remote?.exists === false && !remote.error) {
       const next = (counts.get(mapping.id) ?? 0) + 1;

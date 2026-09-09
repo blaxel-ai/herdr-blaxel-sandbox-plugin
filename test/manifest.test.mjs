@@ -199,3 +199,32 @@ test("formatManifest shows the exact visible target without a prompt", () => {
   assert.match(output, /Previews: private on 3000, 5173/);
   assert.doesNotMatch(output, /Press Enter|approve/);
 });
+
+test("tool credentials and conversation archives cannot be allowed into uploads", () => {
+  for (const file of [
+    ".pi/agent/auth.json",
+    "nested/.pi/agent/sessions/chat.jsonl",
+    ".codex/auth.json",
+    ".codex/sessions/chat.jsonl",
+    ".claude/.credentials.json",
+    ".claude/projects/chat.jsonl",
+    ".local/share/opencode/auth.json",
+  ]) {
+    assert.equal(
+      pathExclusionReason(file, {
+        ...DEFAULT_CONFIG,
+        allowSensitivePaths: [file],
+      }),
+      "agent-credentials",
+      file,
+    );
+  }
+  for (const file of [
+    ".pi/settings.json",
+    ".pi/extensions/index.ts",
+    ".claude/settings.json",
+    ".codex/config.toml",
+  ]) {
+    assert.equal(pathExclusionReason(file, DEFAULT_CONFIG), null, file);
+  }
+});

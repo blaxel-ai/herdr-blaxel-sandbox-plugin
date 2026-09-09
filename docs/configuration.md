@@ -2,6 +2,8 @@
 
 The default configuration uses Codex, your current Blaxel CLI workspace, the `blaxel/ts-app:latest` image, 4 GB of memory, private previews, and a seven-day idle deletion policy. You do not need a configuration file for the default path.
 
+Choose the default tool with **t** and the workspace with **w** in the dashboard. These controls save the same `config.json`; switching tools clears `agentArgs` so flags from a different tool are not reused.
+
 ## Find the configuration directory
 
 Run:
@@ -43,7 +45,7 @@ Unknown keys and invalid values stop the action with a clear error.
 
 | Setting               | Default                        | Purpose                                                                               |
 | --------------------- | ------------------------------ | ------------------------------------------------------------------------------------- |
-| `agent`               | `codex`                        | Selects `codex`, `claude-code`, or `opencode`.                                        |
+| `agent`               | `codex`                        | Selects `codex`, `claude-code`, `opencode`, or `pi`.                                  |
 | `agentArgs`           | `[]`                           | Appends arguments to the selected agent command.                                      |
 | `workspace`           | `null`                         | Uses a specific Blaxel workspace. `null` uses the current CLI workspace.              |
 | `region`              | `null`                         | Uses a specific Blaxel region. `null` lets Blaxel choose.                             |
@@ -70,7 +72,7 @@ Run **Connect Blaxel workspace** when you want to sign in or change the active a
 
 Do not put tokens in `config.json` or `agentArgs`. The plugin never copies host coding-agent sessions, config directories, cookies, or credential files into a Sandbox.
 
-For Codex, a present `OPENAI_API_KEY` is sent as a Blaxel encrypted secret and used by `codex login --with-api-key` inside the Sandbox. OpenCode receives the same encrypted variable and uses it through its OpenAI provider. For Claude Code, a present `ANTHROPIC_API_KEY` is sent as a Blaxel encrypted secret. Only the selected adapter's declared variable is sent, its value is never printed or stored in plugin state, and interactive authentication remains available when no key is present.
+For Codex, a present `OPENAI_API_KEY` is sent as a Blaxel encrypted secret and used by `codex login --with-api-key` inside the Sandbox. OpenCode and Pi accept encrypted `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` variables. They also support their native provider selection and login interfaces inside the Sandbox. Other providers can be configured there; the plugin does not copy your host configuration. For Claude Code, a present `ANTHROPIC_API_KEY` is sent as a Blaxel encrypted secret. Only the selected adapter's declared variable is sent, its value is never printed or stored in plugin state, and interactive authentication remains available when no key is present.
 
 The upload starts from Git tracked and untracked files. It excludes Git-ignored paths, `.git`, dependencies, environment files, common credentials, private keys, cloud configuration, Terraform state, symlinks, and recognized token formats.
 
@@ -78,4 +80,4 @@ The upload starts from Git tracked and untracked files. It excludes Git-ignored 
 
 ## Previews
 
-Private previews are the default. Their short-lived access token appears only in the Herdr popup. Set `publicPreviews` to `true` only when the application is safe for anyone with the URL to access.
+Private previews are the default. Their short-lived access token appears only in the preview dialog. Set `publicPreviews` to `true` only when the application is safe for anyone with the URL to access.

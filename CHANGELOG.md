@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Keep long prompts and Unicode input readable, preserve newer connection state, and bound complete patch reviews to 1 MiB with independent temporary exports.
+
+- Preserve truecolor in remote coding terminals, hide the redundant tmux status bar, and give shared dialogs rounded borders and colored patch reviews.
+- Refresh Herdr screenshots from genuine terminal recordings and hold Pi dependency resolution to its verified publication cutoff after an upstream AWS SDK resolution failure.
+
+- Add pinned Pi support alongside Codex, Claude Code, and OpenCode, with one adapter registry for configuration and saved state.
+- Add dashboard tool and workspace selection, creation from an empty dashboard, and shared dialogs with a dimmed backdrop, scrolling, Escape cancellation, and Unicode-aware layout.
+- Show changed code before Apply, preserve active provisioning during dashboard cleanup, verify Stop results, and check CLI login before provisioning a configured workspace.
+- Add parameterized live walkthroughs with optional real model editing for each tool; keep provider credentials out of unattended CI by default.
+
 - Add `llms.txt`, contributor maintenance guidance, and a compatibility table.
 - Exercise minimum/latest Herdr on Linux and macOS, check Node.js 22/24, and add weekly dependency updates and an opt-in disposable live lifecycle workflow.
 - Normalize Sandbox names after truncation so custom prefixes cannot produce consecutive hyphens rejected by Blaxel.

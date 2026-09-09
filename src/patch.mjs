@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 
@@ -9,6 +10,8 @@ import {
 } from "./sandbox.mjs";
 import { runSync } from "./process.mjs";
 import { PluginError } from "./result.mjs";
+
+export const MAX_PATCH_BYTES = 1024 * 1024;
 
 async function exportRemotePatch(mapping, options = {}) {
   const getSandbox = options.getSandbox ?? getSandboxOrNull;
@@ -28,7 +31,7 @@ async function exportRemotePatch(mapping, options = {}) {
       "The mapping has no remote export baseline.",
     );
   }
-  const patchPath = `/tmp/herdr-${mapping.id}-export.patch`;
+  const patchPath = `/tmp/herdr-${mapping.id}-${randomUUID()}-export.patch`;
   const command = [
     "set -eu",
     `cd ${shellQuote(mapping.remoteRoot)}`,
@@ -36,35 +39,52 @@ async function exportRemotePatch(mapping, options = {}) {
     `git commit -q --allow-empty -m ${shellQuote(`Herdr export ${new Date().toISOString()}`)}`,
     "next=$(git rev-parse HEAD)",
     `git diff --binary ${shellQuote(mapping.lastAppliedExportCommit)} "$next" > ${shellQuote(patchPath)}`,
-    "printf '%s' \"$next\"",
+    `printf '%s\\n' "$next"; wc -c < ${shellQuote(patchPath)}`,
   ].join("\n");
-  const snapshot = await sandbox.process.exec({
-    name: `herdr-export-${mapping.id.slice(0, 8)}-${Date.now()}`,
-    command,
-    workingDir: mapping.remoteRoot,
-    waitForCompletion: true,
-    timeout: 60,
-  });
-  const exitCode = snapshot.exitCode ?? snapshot.exit_code;
-  if (
-    String(snapshot.status).toLowerCase() === "failed" ||
-    (Number.isInteger(exitCode) && exitCode !== 0)
-  ) {
-    throw new PluginError(
-      "remote_export_failed",
-      snapshot.stderr || snapshot.logs || "Remote patch export failed.",
-    );
+  try {
+    const snapshot = await sandbox.process.exec({
+      name: `herdr-export-${mapping.id.slice(0, 8)}-${Date.now()}`,
+      command,
+      workingDir: mapping.remoteRoot,
+      waitForCompletion: true,
+      timeout: 60,
+    });
+    const exitCode = snapshot.exitCode ?? snapshot.exit_code;
+    if (
+      String(snapshot.status).toLowerCase() === "failed" ||
+      (Number.isInteger(exitCode) && exitCode !== 0)
+    ) {
+      throw new PluginError(
+        "remote_export_failed",
+        snapshot.stderr || snapshot.logs || "Remote patch export failed.",
+      );
+    }
+    const metadata = String(snapshot.stdout ?? "")
+      .trim()
+      .match(/^([0-9a-f]{40})\s+(\d+)$/);
+    if (!metadata) {
+      throw new PluginError(
+        "remote_export_failed",
+        "Remote patch export returned invalid commit or size metadata.",
+      );
+    }
+    const [, nextCommit, size] = metadata;
+    if (Number(size) > MAX_PATCH_BYTES)
+      throw new PluginError(
+        "patch_too_large",
+        "The remote patch exceeds the 1 MiB review limit. Reduce the remote changes before retrying; no local files were changed.",
+      );
+    const blob = await sandbox.fs.readBinary(patchPath);
+    if (blob.size !== Number(size))
+      throw new PluginError(
+        "patch_changed",
+        "The remote patch changed during export. Retry Apply to review a fresh patch.",
+      );
+    const patch = Buffer.from(await blob.arrayBuffer());
+    return { nextCommit, patch };
+  } finally {
+    await sandbox.fs.rm(patchPath).catch(() => {});
   }
-  const nextCommit = String(snapshot.stdout ?? "").trim();
-  if (!/^[0-9a-f]{40}$/.test(nextCommit)) {
-    throw new PluginError(
-      "remote_export_failed",
-      "Remote patch export returned no commit.",
-    );
-  }
-  const blob = await sandbox.fs.readBinary(patchPath);
-  const patch = Buffer.from(await blob.arrayBuffer());
-  return { nextCommit, patch };
 }
 
 function checkPatch(localPatch, mapping, runCommand) {

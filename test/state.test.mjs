@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { connectionIsCurrent } from "../src/mappings.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -154,5 +155,21 @@ test("validateState rejects incomplete mappings", () => {
         },
       }),
     /Mapping unsafe is invalid/,
+  );
+});
+
+test("connection completion cannot replace a newer pane or a stopped/deleting mapping", () => {
+  const mapping = { remotePaneId: "new-pane", lifecycleState: "connected" };
+  assert.equal(connectionIsCurrent(mapping, "new-pane"), true);
+  assert.equal(connectionIsCurrent(mapping, "old-pane"), false);
+  for (const lifecycleState of ["stopped", "deleting", "provisioning"])
+    assert.equal(
+      connectionIsCurrent({ ...mapping, lifecycleState }, "new-pane"),
+      false,
+    );
+  assert.equal(connectionIsCurrent(undefined, "new-pane"), false);
+  assert.equal(
+    connectionIsCurrent({ lifecycleState: "ready" }, undefined),
+    false,
   );
 });

@@ -5,6 +5,14 @@ export function nowIso() {
   return new Date().toISOString();
 }
 
+export function connectionIsCurrent(mapping, paneId) {
+  return Boolean(
+    paneId &&
+    mapping?.remotePaneId === paneId &&
+    ["connected", "ready"].includes(mapping.lifecycleState),
+  );
+}
+
 export async function patchMapping(mappingId, patch) {
   let updated;
   await updateState((state) => {
