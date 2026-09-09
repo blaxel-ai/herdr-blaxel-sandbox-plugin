@@ -127,6 +127,7 @@ http.createServer((request, response) => {
       redirect: "manual",
       signal: AbortSignal.timeout(30_000),
     });
+    console.log(`PROBE_HTTP anonymous=${anonymous.status}`);
     assert.ok(
       [401, 403].includes(anonymous.status),
       "anonymous preview must be denied",
@@ -135,6 +136,7 @@ http.createServer((request, response) => {
     const response = await fetch(preview.temporaryUrl, {
       signal: AbortSignal.timeout(30_000),
     });
+    console.log(`PROBE_HTTP authenticated=${response.status}`);
     assert.equal(response.status, 200);
     assert.match(response.headers.get("content-type"), /application\/json/);
     assert.match(
@@ -149,6 +151,7 @@ http.createServer((request, response) => {
     const notFound = await fetch(missing, {
       signal: AbortSignal.timeout(30_000),
     });
+    console.log(`PROBE_HTTP unknown-route=${notFound.status}`);
     assert.equal(notFound.status, 404);
     await notFound.body?.cancel();
     console.log(
