@@ -63,6 +63,20 @@ test("the safe shell bootstraps the persistent wrapper only for interactive conn
   );
 });
 
+test("truncation never leaves consecutive hyphens in a Sandbox name", () => {
+  for (const prefix of ["herdr-maint-09", "herdr"]) {
+    const name = sandboxNameFor({
+      prefix,
+      agentKind: "claude-code",
+      localRoot: "/a/invoice-summary-with-a-long-name",
+      sourcePaneId: "w1:p1",
+    });
+    assert.match(name, /^[a-z0-9]+(?:-[a-z0-9]+)*$/);
+    assert.ok(name.length <= 49);
+    assert.match(name, /-[0-9a-f]{10}$/);
+  }
+});
+
 test("terminalWrapper starts the configured adapter through one tmux session", () => {
   const wrapper = terminalWrapper(
     {

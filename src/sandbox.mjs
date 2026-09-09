@@ -5,6 +5,8 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { SandboxInstance } from "@blaxel/core";
 
+import "./integration-user-agent.mjs";
+
 import {
   adapterCapabilities,
   adapterSecretEnvironment,
@@ -52,7 +54,7 @@ export function sandboxNameFor({
   const base =
     slug(path.basename(localRoot)).slice(0, baseLength) ||
     "worktree".slice(0, baseLength);
-  return `${prefixPart}-${agent}-${base}-${digest}`;
+  return slug(`${prefixPart}-${agent}-${base}-${digest}`);
 }
 
 export function tmuxSessionFor(mapping) {

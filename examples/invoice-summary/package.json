@@ -1,0 +1,13 @@
+{
+  "name": "herdr-invoice-summary",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node invoices.mjs",
+    "test": "node --test"
+  }
+}

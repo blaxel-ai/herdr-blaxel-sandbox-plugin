@@ -42,6 +42,20 @@ That is the complete default setup. The plugin uses Codex and your current Blaxe
 
 If you are signed out, Start runs the official Blaxel login flow and then continues automatically.
 
+## Compatibility and maintenance
+
+| Component                      | Supported or pinned version                       |
+| ------------------------------ | ------------------------------------------------- |
+| Herdr                          | Minimum `0.8.0`; current release checked: `0.9.0` |
+| Local Node.js                  | `22` and `24` in CI                               |
+| Blaxel CLI                     | `0.1.110` used for lifecycle verification         |
+| Blaxel TypeScript SDK          | `0.3.11`                                          |
+| Codex / Claude Code / OpenCode | `0.147.0` / `2.1.226` / `1.14.48`                 |
+
+Michael Stolarz maintains this integration. CI exercises the real minimum and latest Herdr on Linux and macOS, with weekly checks for upstream changes. Dependabot proposes npm and GitHub Actions updates. See [verification](docs/verification.md) for the disposable live smoke test, credentials setup, and the distinction between lifecycle and model verification.
+
+Start with [llms.txt](llms.txt) for an index of the usage guides; contributors should also read [AGENTS.md](AGENTS.md).
+
 ## What you get
 
 - Every `sbx` invocation creates an independent persistent Sandbox, even from the same worktree and pane.
@@ -171,6 +185,7 @@ Only permanent replacement and deletion require a typed `DELETE`. Normal start, 
 
 ## Learn more
 
+- [Runnable invoice summary example](examples/invoice-summary/README.md)
 - [Configuration](docs/configuration.md)
 - [Keybindings](docs/keybindings.md)
 - [Troubleshooting](docs/troubleshooting.md)
