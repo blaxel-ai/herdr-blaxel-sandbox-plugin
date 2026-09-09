@@ -10,6 +10,7 @@ import { formatManifest } from "./manifest.mjs";
 import { runSync } from "./process.mjs";
 import { PluginError, errorMessage } from "./result.mjs";
 import { prepareStart, provisionStart } from "./start.mjs";
+import { verifyTerminalLogin } from "./sandbox.mjs";
 
 function sourceContext() {
   return parsePluginContext(
@@ -39,7 +40,9 @@ async function runLogin() {
 
 async function prepareWithLogin(context) {
   try {
-    return prepareStart(context);
+    const prepared = prepareStart(context);
+    verifyTerminalLogin(prepared.workspace);
+    return prepared;
   } catch (error) {
     if (
       error instanceof PluginError &&
@@ -48,7 +51,9 @@ async function prepareWithLogin(context) {
       )
     ) {
       await runLogin();
-      return prepareStart(context);
+      const prepared = prepareStart(context);
+      verifyTerminalLogin(prepared.workspace);
+      return prepared;
     }
     throw error;
   }

@@ -5,19 +5,19 @@
 [![Blaxel Sandbox](https://img.shields.io/badge/Blaxel-Sandbox-6d5dfc)](https://docs.blaxel.ai/Sandboxes/Overview)
 [![License](https://img.shields.io/github/license/blaxel-ai/herdr-blaxel-sandbox-plugin)](LICENSE)
 
-Run Codex, Claude Code, or OpenCode in a persistent Blaxel Sandbox without leaving Herdr.
+Run Codex, Claude Code, OpenCode, or Pi in a persistent Blaxel Sandbox without leaving Herdr.
 
 Your worktree stays local. The plugin sends a safety-filtered snapshot to Blaxel, keeps the agent running in a persistent remote session, and brings its changes back as a checked Git patch.
 
-![Herdr running OpenCode and the repository test suite in a live Blaxel Sandbox](docs/assets/herdr-blaxel-live-terminal.png)
+![Pi editing the invoice example in a persistent Blaxel Sandbox inside Herdr](docs/assets/herdr-blaxel-pi-terminal.png)
 
-![The live Blaxel Sandbox dashboard inside Herdr](docs/assets/herdr-blaxel-dashboard-terminal.png)
+![The Blaxel dashboard managing a running Pi sandbox for the invoice worktree](docs/assets/herdr-blaxel-dashboard-terminal.png)
 
 ```mermaid
 flowchart LR
     A["Worktree in Herdr"] --> B["Safety-filtered snapshot"]
     B --> C["Persistent Blaxel Sandbox"]
-    C --> D["Codex, Claude Code, or OpenCode"]
+    C --> D["Codex, Claude Code, OpenCode, or Pi"]
     D --> E["Checked Git patch back"]
 ```
 
@@ -44,13 +44,13 @@ If you are signed out, Start runs the official Blaxel login flow and then contin
 
 ## Compatibility and maintenance
 
-| Component                      | Supported or pinned version                       |
-| ------------------------------ | ------------------------------------------------- |
-| Herdr                          | Minimum `0.8.0`; current release checked: `0.9.0` |
-| Local Node.js                  | `22` and `24` in CI                               |
-| Blaxel CLI                     | `0.1.110` used for lifecycle verification         |
-| Blaxel TypeScript SDK          | `0.3.11`                                          |
-| Codex / Claude Code / OpenCode | `0.147.0` / `2.1.226` / `1.14.48`                 |
+| Component                           | Supported or pinned version                       |
+| ----------------------------------- | ------------------------------------------------- |
+| Herdr                               | Minimum `0.8.0`; current release checked: `0.9.0` |
+| Local Node.js                       | `22` and `24` in CI                               |
+| Blaxel CLI                          | `0.1.110` used for lifecycle verification         |
+| Blaxel TypeScript SDK               | `0.3.11`                                          |
+| Codex / Claude Code / OpenCode / Pi | `0.147.0` / `2.1.226` / `1.14.48` / `0.73.1`      |
 
 Michael Stolarz maintains this integration. CI exercises the real minimum and latest Herdr on Linux and macOS, with weekly checks for upstream changes. Dependabot proposes npm and GitHub Actions updates. See [verification](docs/verification.md) for the disposable live smoke test, credentials setup, and the distinction between lifecycle and model verification.
 
@@ -59,7 +59,7 @@ Start with [llms.txt](llms.txt) for an index of the usage guides; contributors s
 ## What you get
 
 - Every `sbx` invocation creates an independent persistent Sandbox, even from the same worktree and pane.
-- Built-in Codex, Claude Code, and OpenCode support.
+- Built-in Codex, Claude Code, OpenCode, and Pi support.
 - Reconnectable agent sessions that survive local terminal disconnects.
 - Private application previews for common development ports.
 - A checked Git patch when you bring remote changes back.
@@ -67,7 +67,11 @@ Start with [llms.txt](llms.txt) for an index of the usage guides; contributors s
 
 ## Choose an agent
 
-Find the plugin's managed configuration directory:
+Open **Blaxel dashboard** and press **t** to choose a coding tool. Press **w** to select the workspace for new Sandboxes. Existing Sandboxes keep their original tool and workspace.
+
+![Choose Codex, Claude Code, OpenCode, or Pi while the dashboard is dimmed](docs/assets/herdr-blaxel-tool-chooser.png)
+
+For advanced tool arguments, find the plugin's managed configuration directory:
 
 ```bash
 herdr plugin config-dir blaxel.sandbox
@@ -82,7 +86,7 @@ Create `config.json` there with the agent you want:
 }
 ```
 
-Use `codex`, `claude-code`, or `opencode`. Every setting is optional. See the [configuration reference](docs/configuration.md) for workspace, region, image, memory, preview, upload, and lifecycle options.
+Use `codex`, `claude-code`, `opencode`, or `pi`. Every setting is optional. See the [configuration reference](docs/configuration.md) for workspace, region, image, memory, preview, upload, and lifecycle options.
 
 ## Short commands
 
@@ -120,17 +124,22 @@ Every `sbx` or `sbx new` creates another independent Sandbox. The function only 
 
 ## Dashboard
 
-`sbx list` opens the primary management interface. It renders local mappings immediately, refreshes Blaxel state in the background, and shows each Sandbox's repository, branch, agent, state, age, workspace, version, and idle-deletion policy.
+`herdr plugin action invoke dashboard --plugin blaxel.sandbox` opens the primary management interface. The optional `sbx list` function opens the same dashboard. It renders local mappings immediately, refreshes Blaxel state in the background, and shows each Sandbox's repository, branch, agent, state, age, workspace, and idle-deletion policy. Open **Info** with **i** to inspect the installed tool version.
 
-| Key                  | Action                                       |
-| -------------------- | -------------------------------------------- |
-| `Enter` or `c`       | Connect to the persistent agent              |
-| `n`                  | Create another Sandbox for the selected repo |
-| `a`                  | Review and apply remote changes locally      |
-| `i`, `l`, or `p`     | Open info, logs, or previews                 |
-| `s`                  | Stop the agent but preserve files            |
-| `x` or `d`           | Replace or delete after typed `DELETE`       |
-| `r`, `j`/`k`, or `q` | Refresh, move selection, or close            |
+| Key                  | Action                                        |
+| -------------------- | --------------------------------------------- |
+| `t` / `w`            | Choose the tool / workspace for new Sandboxes |
+| `Enter` or `c`       | Connect to the persistent agent               |
+| `n`                  | Create another Sandbox for the selected repo  |
+| `a`                  | Review and apply remote changes locally       |
+| `i`, `l`, or `p`     | Open info, logs, or previews                  |
+| `s`                  | Stop the agent but preserve files             |
+| `x` or `d`           | Replace or delete after typed `DELETE`        |
+| `r`, `j`/`k`, or `q` | Refresh, move selection, or close             |
+
+Dialogs dim the dashboard, keep keyboard input inside the active dialog, and restore the selected row when closed. Use Page Up and Page Down to read long logs and complete patches. Escape cancels an unanswered prompt or closes a finished dialog. Start works from an empty dashboard with **n**. Apply reviews complete patches up to 1 MiB; larger exports are refused before download or local changes. Reduce the remote changes before retrying.
+
+![Review the remote Git patch before approving local changes](docs/assets/herdr-blaxel-review-changes.png)
 
 ## Actions
 
@@ -166,7 +175,7 @@ herdr plugin action invoke info --plugin blaxel.sandbox
 herdr plugin action invoke logs --plugin blaxel.sandbox
 herdr plugin action invoke previews --plugin blaxel.sandbox
 
-# Stop compute without deleting files, or permanently delete with typed DELETE.
+# Stop the agent without deleting files, or permanently delete with typed DELETE.
 herdr plugin action invoke stop --plugin blaxel.sandbox
 herdr plugin action invoke delete-sandbox --plugin blaxel.sandbox
 ```

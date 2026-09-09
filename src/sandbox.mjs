@@ -10,7 +10,7 @@ import "./integration-user-agent.mjs";
 import {
   adapterCapabilities,
   adapterSecretEnvironment,
-  agentAuthenticationCommand,
+  agentSetupCommands,
   agentInstallCommand,
 } from "./adapters.mjs";
 import {
@@ -18,12 +18,10 @@ import {
   MAX_SANDBOX_NAME_LENGTH,
   DEFAULT_SHELL_PATH,
 } from "./constants.mjs";
-import { runSync } from "./process.mjs";
+import { runSync, shellQuote } from "./process.mjs";
 import { PluginError } from "./result.mjs";
 
-export function shellQuote(value) {
-  return `'${String(value).replaceAll("'", `'"'"'`)}'`;
-}
+export { shellQuote } from "./process.mjs";
 
 function slug(value) {
   return value
@@ -106,6 +104,19 @@ export function resolveBlaxelWorkspace(config, options = {}) {
   return workspace;
 }
 
+export function verifyTerminalLogin(workspace, options = {}) {
+  // Capture and discard the token. Never include stdout/stderr in errors or state.
+  const result = (options.runCommand ?? runSync)("bl", ["token", workspace], {
+    check: false,
+  });
+  if (result.status !== 0 || !result.stdout.trim()) {
+    throw new PluginError(
+      "blaxel_login_required",
+      `Sign in to the Blaxel workspace ${workspace}.`,
+    );
+  }
+}
+
 export async function getSandboxOrNull(name, workspace) {
   selectWorkspace(workspace);
   try {
@@ -158,15 +169,13 @@ function setupCommand(adapter, secretNames, mapping) {
     "fi",
     agentInstallCommand(adapter),
   ];
-  const authenticate = agentAuthenticationCommand(adapter, secretNames);
-  if (authenticate) commands.push(authenticate);
-  if (adapter.kind === "codex") {
-    const trustedProject = `[projects.${JSON.stringify(remoteWorkingDirectory(mapping))}]\ntrust_level = "trusted"\n`;
-    commands.push(
-      'mkdir -p "$HOME/.codex"',
-      `printf '%s' ${shellQuote(trustedProject)} > "$HOME/.codex/config.toml"`,
-    );
-  }
+  commands.push(
+    ...agentSetupCommands(
+      adapter,
+      secretNames,
+      remoteWorkingDirectory(mapping),
+    ),
+  );
   return commands.join("\n");
 }
 
@@ -180,7 +189,7 @@ export function terminalWrapper(mapping, adapter, agentArgs = []) {
   const tmuxSession = tmuxSessionFor(mapping);
   const command = [...adapter.launch, ...agentArgs].map(shellQuote).join(" ");
   const workingDirectory = remoteWorkingDirectory(mapping);
-  return `#!/bin/sh\nset -eu\nexport HERDR_AGENT=${shellQuote(adapter.herdrDetectionKind)}\nexport TERM=xterm-256color\nexport COLORTERM=truecolor\ncd ${shellQuote(workingDirectory)}\nexec tmux -u new-session -A -s ${shellQuote(tmuxSession)} -c ${shellQuote(workingDirectory)} ${shellQuote(command)}\n`;
+  return `#!/bin/sh\nset -eu\nexport HERDR_AGENT=${shellQuote(adapter.herdrDetectionKind)}\nexport TERM=xterm-256color\nexport COLORTERM=truecolor\ncd ${shellQuote(workingDirectory)}\nexec tmux -u -T RGB new-session -A -s ${shellQuote(tmuxSession)} -c ${shellQuote(workingDirectory)} ${shellQuote(command)} ';' set-option -t ${shellQuote(tmuxSession)} status off\n`;
 }
 
 export function interactiveShellBootstrap() {
@@ -281,17 +290,20 @@ async function verifyAgentVersion(sandbox, mapping, adapter) {
     timeout: 60,
   });
   const exitCode = result.exitCode ?? result.exit_code;
-  const output = String(
-    result.stdout ?? result.logs ?? result.stderr ?? "",
-  ).trim();
+  const output = [result.stdout, result.stderr, result.logs]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
   if (
     String(result.status).toLowerCase() === "failed" ||
-    (Number.isInteger(exitCode) && exitCode !== 0) ||
-    !output.includes(adapter.expectedVersion)
+    exitCode !== 0 ||
+    !new RegExp(
+      `\\b${adapter.expectedVersion.replaceAll(".", "\\.")}(?![\\d.])`,
+    ).test(output)
   ) {
     throw new PluginError(
       "agent_version_mismatch",
-      `${adapter.title} did not report expected version ${adapter.expectedVersion}.`,
+      `${adapter.title} did not report expected version ${adapter.expectedVersion}${output ? `: ${output.slice(0, 1000)}` : "."}`,
       { details: { exitCode, output } },
     );
   }
@@ -379,6 +391,7 @@ export async function provisionSandbox({
           { name: "COLORTERM", value: "truecolor" },
           { name: "HERDR_BLAXEL_AGENT_KIND", value: mapping.agentKind },
           { name: "HERDR_BLAXEL_REMOTE_ROOT", value: mapping.remoteRoot },
+          ...(adapter.environment ?? []),
           ...providerSecrets,
         ],
       },
@@ -433,11 +446,18 @@ export async function stopAgent(mapping, options = {}) {
   const session = tmuxSessionFor(mapping);
   const result = await sandbox.process.exec({
     name: `herdr-stop-${mapping.id.slice(0, 8)}-${Date.now()}`,
-    command: `tmux has-session -t ${shellQuote(session)} 2>/dev/null && tmux kill-session -t ${shellQuote(session)} || true`,
+    command: `set -eu\nif tmux has-session -t ${shellQuote(session)} 2>/dev/null; then tmux kill-session -t ${shellQuote(session)}; fi\nif tmux has-session -t ${shellQuote(session)} 2>/dev/null; then echo 'Agent session is still running.' >&2; exit 1; fi`,
     workingDir: mapping.remoteRoot,
     waitForCompletion: true,
     timeout: 60,
   });
+  const exitCode = result.exitCode ?? result.exit_code;
+  if (String(result.status).toLowerCase() === "failed" || exitCode !== 0) {
+    throw new PluginError(
+      "agent_stop_failed",
+      "Could not confirm that the agent stopped. Reconnect or retry Stop.",
+    );
+  }
   return { status: "stopped", result };
 }
 

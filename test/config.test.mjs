@@ -113,3 +113,32 @@ test("loadConfig reads a strict user configuration", () => {
     remove(directory);
   }
 });
+
+test("saveConfig persists Pi and advanced settings with private file permissions", async () => {
+  const { saveConfig } = await import("../src/config.mjs");
+  const directory = temporaryDirectory();
+  try {
+    const config = saveConfig(
+      {
+        agent: "pi",
+        workspace: "test",
+        previewPorts: [4321],
+        excludedPaths: ["generated/"],
+      },
+      { directory },
+    );
+    assert.deepEqual(loadConfig({ directory }), config);
+    assert.equal(
+      fs.statSync(path.join(directory, "config.json")).mode & 0o777,
+      0o600,
+    );
+    assert.throws(
+      () => saveConfig({ agent: "invalid" }, { directory }),
+      /agent must be/,
+    );
+    assert.deepEqual(loadConfig({ directory }), config);
+    assert.deepEqual(fs.readdirSync(directory), ["config.json"]);
+  } finally {
+    remove(directory);
+  }
+});

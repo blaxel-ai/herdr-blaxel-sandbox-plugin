@@ -14,7 +14,7 @@ test("all built-in adapters pin one package and expected version", () => {
   const adapters = listAdapters();
   assert.deepEqual(
     adapters.map((adapter) => adapter.kind),
-    ["codex", "claude-code", "opencode"],
+    ["codex", "claude-code", "opencode", "pi"],
   );
   for (const adapter of adapters) {
     assert.match(adapter.package, /@\d+\.\d+\.\d+$/);
@@ -22,7 +22,9 @@ test("all built-in adapters pin one package and expected version", () => {
     assert.equal(adapter.launch.length, 1);
     assert.equal(
       agentInstallCommand(adapter),
-      `npm install --global --no-audit --no-fund ${adapter.package}`,
+      adapter.kind === "pi"
+        ? "npm install --global --no-audit --no-fund --before='2026-09-09T18:00:00Z' @mariozechner/pi-coding-agent@0.73.1"
+        : `npm install --global --no-audit --no-fund ${adapter.package}`,
     );
   }
 });
@@ -54,7 +56,7 @@ test("adapters expose only present provider keys as encrypted environment", () =
   assert.deepEqual(
     adapterSecretEnvironment(getAdapter("opencode"), {
       OPENAI_API_KEY: "test-key",
-      ANTHROPIC_API_KEY: "not-for-opencode",
+      UNRELATED_API_KEY: "not-for-opencode",
     }),
     [{ name: "OPENAI_API_KEY", value: "test-key", secret: true }],
   );

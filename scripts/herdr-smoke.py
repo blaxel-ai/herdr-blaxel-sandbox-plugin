@@ -14,7 +14,11 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--herdr", default="herdr")
 parser.add_argument("--install-ref", help="Fresh GitHub install of this exact commit instead of linking")
 parser.add_argument("--live", action="store_true")
+parser.add_argument("--agent", default="codex", help="Coding tool from the plugin adapter registry")
+parser.add_argument("--agent-args", default="[]", help="JSON array of tool arguments")
+parser.add_argument("--model-test", action="store_true", help="Use an approved provider key for a real file-editing task; requires --live")
 args = parser.parse_args()
+assert not args.model_test or args.live, "--model-test requires --live"
 repo = Path(__file__).resolve().parent.parent
 binary = shutil.which(args.herdr)
 assert binary, "Herdr binary is required"
@@ -38,8 +42,9 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
     base = Path(temporary)
     env = dict(os.environ)
     # This deterministic lifecycle probe launches the CLI but does not call a model.
-    env.pop("OPENAI_API_KEY", None)
-    env.pop("ANTHROPIC_API_KEY", None)
+    if not args.model_test:
+        env.pop("OPENAI_API_KEY", None)
+        env.pop("ANTHROPIC_API_KEY", None)
     for key in list(env):
         if key.startswith("HERDR_") or key.startswith("BLAXEL_HERDR_"):
             del env[key]
@@ -103,6 +108,7 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
         if args.install_ref:
             assert plugin["source"]["resolved_commit"] == args.install_ref
         installed = Path(plugin["plugin_root"])
+        adapter = json.loads(run(["node", "--input-type=module", "-e", "import { getAdapter } from './src/adapters.mjs'; console.log(JSON.stringify(getAdapter(process.argv[1])))", args.agent], cwd=installed))
         run(["node", "-e", "import('@blaxel/core')"], cwd=installed)
         project = base / "invoice-summary"
         shutil.copytree(installed / "examples/invoice-summary", project)
@@ -111,7 +117,7 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
         root = result("workspace", "create", "--cwd", str(project), "--label", "Herdr smoke", "--no-focus")["root_pane"]["pane_id"]
         plugin_config = Path(herdr("plugin", "config-dir", "blaxel.sandbox").strip())
         plugin_config.mkdir(parents=True, exist_ok=True)
-        (plugin_config / "config.json").write_text(json.dumps({"workspace": os.environ.get("BL_WORKSPACE"), "sandboxNamePrefix": "herdr-smoke", "idleDelete": "30m", "previewPorts": [3000], "publicPreviews": False}))
+        (plugin_config / "config.json").write_text(json.dumps({"agent": args.agent, "agentArgs": json.loads(args.agent_args), "workspace": os.environ.get("BL_WORKSPACE"), "sandboxNamePrefix": "herdr-smoke", "idleDelete": "30m", "previewPorts": [3000], "publicPreviews": False}))
 
         def open_pane(entrypoint, extra=None):
             command = ["plugin", "pane", "open", "--plugin", "blaxel.sandbox", "--entrypoint", entrypoint, "--placement", "split", "--target-pane", root, "--no-focus"]
@@ -121,11 +127,22 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
 
         dashboard = open_pane("dashboard")
         await_text(dashboard, "No tracked Sandboxes")
-        close(dashboard)
+        herdr("pane", "send-text", dashboard, "t")
+        await_text(dashboard, "Choose a coding tool")
+        await_text(dashboard, "Pi")
+        herdr("pane", "send-text", dashboard, "\x1b")
+        await_text(dashboard, "No tracked Sandboxes")
+        original_config = (plugin_config / "config.json").read_text()
+        herdr("pane", "send-text", dashboard, "t")
+        await_text(dashboard, "Choose a coding tool")
+        herdr("pane", "send-text", dashboard, "4\n")
+        wait_for(lambda: json.loads((plugin_config / "config.json").read_text())["agent"] == "pi", "Pi selected and saved")
+        assert json.loads((plugin_config / "config.json").read_text())["previewPorts"] == [3000]
+        (plugin_config / "config.json").write_text(original_config)
         print("PASS plugin registration, dependencies, example tests and dashboard", flush=True)
         if args.live:
-            # Start gets real source context from the user's worktree pane.
-            herdr("pane", "run", root, "herdr plugin action invoke start-agent --plugin blaxel.sandbox")
+            # Exercise first-run Start directly from an empty dashboard.
+            herdr("pane", "send-text", dashboard, "n")
             state_file = wait_for(lambda: next((base / "state").rglob("state.json"), None), "Start state")
             probe_env = dict(env, HERDR_PLUGIN_CONFIG_DIR=str(plugin_config), HERDR_PLUGIN_STATE_DIR=str(state_file.parent))
 
@@ -136,19 +153,61 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
                 current = mapping()
                 if current is None:
                     return None
-                assert current["lifecycleState"] != "failed", "Start or terminal connection failed"
+                if current["lifecycleState"] == "failed":
+                    message = str(current.get("lastError", "Start or terminal connection failed"))
+                    for name, value in env.items():
+                        if value and any(word in name for word in ["KEY", "TOKEN", "SECRET"]):
+                            message = message.replace(value, "[REDACTED]")
+                    message = re.sub(r"(?:sk-[A-Za-z0-9_-]+|Bearer [^\s\"]+)", "[REDACTED]", message)
+                    raise AssertionError(message[:1200])
                 return current if current["lifecycleState"] == "connected" else None
 
             current = wait_for(connected, "Start and terminal connection", 240)
+            close(dashboard)
             agent_pane = current["remotePaneId"]
-            await_text(agent_pane, "Codex", 120)
-            assert current["installedVersion"] == "0.147.0"
-            assert any(p["pane_id"] == agent_pane and p.get("agent") == "codex" for p in result("agent", "list")["agents"])
-            print("PASS Start, filtered invoice upload, pinned Codex and Herdr detection", flush=True)
+            await_text(agent_pane, "Ask anything" if args.agent == "opencode" else adapter["title"], 120)
+            assert current["installedVersion"] == adapter["expectedVersion"]
+            assert any(p["pane_id"] == agent_pane and p.get("agent") == adapter["herdrDetectionKind"] for p in result("agent", "list")["agents"])
+            print(f"PASS Start, filtered upload, pinned {adapter['title']} {adapter['expectedVersion']} and Herdr detection", flush=True)
             probe("session")
+            if args.model_test:
+                prompt = f'Edit invoices.mjs using your file-editing tool. Add an exported function integrationProof() that returns the string "herdr-{args.agent}-verified". Preserve the existing code and do not change other files. Reply DONE after editing.'
+                def ready_for_prompt():
+                    screen = herdr("pane", "read", agent_pane, "--source", "visible")
+                    if args.agent == "claude-code":
+                        if "Do you want to use this API key" in screen:
+                            herdr("pane", "send-keys", agent_pane, "Up")
+                            time.sleep(0.3)
+                            herdr("pane", "send-keys", agent_pane, "Enter")
+                            time.sleep(0.5)
+                            return False
+                        if "Yes, I trust this folder" in screen or "Choose the text style" in screen or ("Security notes:" in screen and "Press Enter to continue" in screen):
+                            herdr("pane", "send-keys", agent_pane, "Enter")
+                            time.sleep(0.5)
+                            return False
+                        return "for shortcuts" in screen or "accept edits" in screen or "bypass permissions" in screen or "Try " in screen
+                    if args.agent == "codex":
+                        if "Use existing model" in screen:
+                            herdr("pane", "send-keys", agent_pane, "Down")
+                            time.sleep(0.3)
+                            herdr("pane", "send-keys", agent_pane, "Enter")
+                            time.sleep(0.5)
+                            return False
+                        return bool(re.search(r"gpt-[^\n]+ · /workspace", screen))
+                    if args.agent == "pi":
+                        return "(auto)" in screen or "gpt-5.4-mini" in screen
+                    return "Ask anything" in screen or "Build" in screen
+                wait_for(ready_for_prompt, f"{args.agent} ready for a prompt", 90)
+                time.sleep(3)
+                # A literal paste and a separate Enter exercise the remote terminal,
+                # including tools whose initialization consumes early keystrokes.
+                herdr("pane", "send-text", agent_pane, "\x1b[200~" + prompt + "\x1b[201~")
+                time.sleep(0.5)
+                herdr("pane", "send-keys", agent_pane, "Enter")
+                probe("model")
             close(agent_pane)
-            agent_pane = open_pane("agent", {"BLAXEL_HERDR_MAPPING_ID": current["id"], "HERDR_AGENT": "codex"})
-            await_text(agent_pane, "Codex", 120)
+            agent_pane = open_pane("agent", {"BLAXEL_HERDR_MAPPING_ID": current["id"], "HERDR_AGENT": adapter["herdrDetectionKind"]})
+            wait_for(lambda: mapping().get("remotePaneId") == agent_pane and mapping().get("lifecycleState") == "connected", "reconnected pane", 60)
             probe("reconnected")
             probe("edit")
             probe("preview")
@@ -160,7 +219,7 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
                 return open_pane("operation", {"BLAXEL_HERDR_MAPPING_ID": current["id"], "BLAXEL_HERDR_OPERATION": name})
 
             apply_pane = operation("apply-changes")
-            await_text(apply_pane, "Apply these changes")
+            await_text(apply_pane, "Apply locally?")
             assert "overdueCents" not in (project / "invoices.mjs").read_text()
             herdr("pane", "send-text", apply_pane, "n\n")
             await_text(apply_pane, "Canceled")
@@ -175,7 +234,7 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
             close(apply_pane)
             (project / "invoices.mjs").write_text(original)
             apply_pane = operation("apply-changes")
-            await_text(apply_pane, "Apply these changes")
+            await_text(apply_pane, "Apply locally?")
             herdr("pane", "send-text", apply_pane, "y\n")
             await_text(apply_pane, "Changes applied locally")
             assert "overdueCents" in (project / "invoices.mjs").read_text()
@@ -199,6 +258,22 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
             herdr("pane", "send-text", confirmation, "DELETE\n")
             wait_for(lambda: not json.loads(state_file.read_text())["mappings"], "typed deletion", 90)
             print("PASS typed deletion: incorrect text preserves sandbox; DELETE removes mapping", flush=True)
+    except Exception:
+        if probe_env:
+            try:
+                current = next(iter(json.loads(state_file.read_text())["mappings"].values()), None)
+                if current and current.get("remotePaneId"):
+                    screen = herdr("pane", "read", current["remotePaneId"], "--source", "visible")
+                    safe_lines = []
+                    for line in screen.splitlines():
+                        if re.search(r"(?i)api.?key|token|secret|sk-|https?://", line):
+                            safe_lines.append("[credential or URL line omitted]")
+                        else:
+                            safe_lines.append(line)
+                    print("DIAGNOSTIC " + args.agent + " terminal:\n" + "\n".join(safe_lines[-28:]), flush=True)
+            except Exception:
+                print("DIAGNOSTIC terminal is no longer available", flush=True)
+        raise
     finally:
         try:
             if probe_env:

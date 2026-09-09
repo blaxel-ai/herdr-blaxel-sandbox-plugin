@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import readline from "node:readline";
+import { isMain, runPane } from "./terminal-ui.mjs";
 
 import { getAdapter } from "./adapters.mjs";
 import { loadConfig } from "./config.mjs";
@@ -11,7 +11,7 @@ import {
   startSnapshotFingerprint,
 } from "./manifest.mjs";
 import { patchMapping } from "./mappings.mjs";
-import { PluginError, errorMessage } from "./result.mjs";
+import { PluginError } from "./result.mjs";
 import {
   deleteSandbox,
   provisionSandbox,
@@ -19,8 +19,6 @@ import {
 } from "./sandbox.mjs";
 import { startTarget } from "./start.mjs";
 import { readState, updateState } from "./state.mjs";
-
-const action = process.env.BLAXEL_HERDR_DESTRUCTIVE_ACTION || "unknown";
 
 function sourceContext() {
   return parsePluginContext(
@@ -44,55 +42,30 @@ function replacementPreview(mapping) {
   };
 }
 
-function askForDelete(mapping, preview) {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    throw new PluginError(
-      "interactive_confirmation_required",
-      "Deletion confirmation requires an interactive terminal.",
-    );
-  }
-  process.stdout.write("\u001b[2J\u001b[H");
-  process.stdout.write(
-    action === "replace"
-      ? "Replace Blaxel Sandbox\n\n"
-      : "Permanently delete Blaxel Sandbox\n\n",
+async function askForDelete(action, mapping, preview, ui) {
+  ui.write(
+    `Sandbox: ${mapping.sandboxName}\nWorkspace: ${mapping.blaxelWorkspace}\nWorktree: ${mapping.localRoot}\n`,
   );
-  if (preview) {
-    process.stdout.write(
-      `${formatManifest(preview.manifest, {
+  if (preview)
+    ui.write(
+      formatManifest(preview.manifest, {
         target: preview.target,
         approvalPrompt: false,
-      })}\n\n`,
+      }),
     );
-  } else {
-    process.stdout.write(
-      `Sandbox: ${mapping.sandboxName}\nAgent: ${mapping.agentKind}\nLocal worktree: ${mapping.localRoot}\n\n`,
-    );
-  }
-  process.stdout.write(
+  ui.write(
     action === "replace"
-      ? "This permanently deletes the current Sandbox, then creates the shown replacement.\n"
-      : "This permanently deletes the Sandbox and removes its local mapping.\n",
+      ? "This permanently deletes the current Sandbox, then creates the shown replacement."
+      : "This permanently deletes the Sandbox and its remote files.",
   );
-  process.stdout.write("Type DELETE within 60 seconds to continue: ");
-  return new Promise((resolve) => {
-    const terminal = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    const timer = setTimeout(() => {
-      terminal.close();
-      resolve(false);
-    }, 60_000);
-    terminal.once("line", (line) => {
-      clearTimeout(timer);
-      terminal.close();
-      resolve(line.trim() === "DELETE");
-    });
-  });
+  return (
+    (
+      await ui.ask("Type DELETE within 60 seconds:", { timeoutMs: 60_000 })
+    ).trim() === "DELETE"
+  );
 }
 
-async function deleteMapping(mapping) {
+async function deleteMapping(mapping, ui) {
   await patchMapping(mapping.id, { lifecycleState: "deleting" });
   await deleteSandbox(mapping);
   await updateState((state) => {
@@ -102,7 +75,7 @@ async function deleteMapping(mapping) {
   if (mapping.remotePaneId) {
     closePluginPane(mapping.remotePaneId, { check: false });
   }
-  process.stdout.write(`\nDeleted ${mapping.sandboxName}.\n`);
+  ui.write(`\nDeleted ${mapping.sandboxName}.\n`);
 }
 
 function revalidateReplacement(mapping, preview) {
@@ -119,9 +92,9 @@ function revalidateReplacement(mapping, preview) {
   return fresh;
 }
 
-async function replaceMapping(mapping, preview) {
+async function replaceMapping(mapping, preview, ui, context) {
   const fresh = revalidateReplacement(mapping, preview);
-  process.stdout.write("\nDeleting the current Sandbox...\n");
+  ui.write("\nDeleting the current Sandbox...\n");
   await patchMapping(mapping.id, { lifecycleState: "deleting" });
   await deleteSandbox(mapping);
   if (mapping.remotePaneId) {
@@ -149,7 +122,7 @@ async function replaceMapping(mapping, preview) {
       adapter: fresh.adapter,
       onLifecycle: async (lifecycleState) => {
         await patchMapping(mapping.id, { lifecycleState });
-        process.stdout.write(`  ${labels[lifecycleState]}...\n`);
+        ui.write(`  ${labels[lifecycleState]}...\n`);
       },
     });
     const ready = await patchMapping(mapping.id, {
@@ -159,8 +132,8 @@ async function replaceMapping(mapping, preview) {
       capabilities: provisioned.capabilities,
       lastError: null,
     });
-    process.stdout.write(`\nReplacement ready: ${ready.sandboxName}\n`);
-    openPluginPane("agent", sourceContext(), {
+    ui.write(`\nReplacement ready: ${ready.sandboxName}\n`);
+    openPluginPane("agent", context, {
       placement: "split",
       targetPaneId: ready.sourcePaneId,
       env: {
@@ -178,30 +151,44 @@ async function replaceMapping(mapping, preview) {
   }
 }
 
-try {
-  if (!new Set(["delete", "replace"]).has(action)) {
+export async function runDestructive(action, mapping, ui, context) {
+  if (!["delete", "replace"].includes(action))
     throw new PluginError(
       "unknown_destructive_action",
-      `Unsupported destructive action: ${action}.`,
+      `Unsupported action: ${action}.`,
     );
-  }
-  const mappingId = process.env.BLAXEL_HERDR_MAPPING_ID;
-  const mapping = mappingId ? readState().mappings[mappingId] : null;
-  if (!mapping) {
-    throw new PluginError(
-      "mapping_not_found",
-      "The requested mapping no longer exists.",
-    );
-  }
   const preview = action === "replace" ? replacementPreview(mapping) : null;
-  if (!(await askForDelete(mapping, preview))) {
-    process.stdout.write("\nCanceled. Nothing was deleted.\n");
-  } else if (action === "delete") {
-    await deleteMapping(mapping);
-  } else {
-    await replaceMapping(mapping, preview);
+  if (!(await askForDelete(action, mapping, preview, ui))) return;
+  const current = readState().mappings[mapping.id];
+  if (!current || current.updatedAt !== mapping.updatedAt)
+    throw new PluginError(
+      "mapping_changed",
+      "The Sandbox changed while this dialog was open. Review it again.",
+    );
+  try {
+    if (action === "delete") await deleteMapping(mapping, ui);
+    else await replaceMapping(mapping, preview, ui, context);
+  } catch (error) {
+    await patchMapping(mapping.id, {
+      lifecycleState: "failed",
+      lastError: error.message,
+    }).catch(() => {});
+    throw error;
   }
-} catch (error) {
-  process.stdout.write(`\n${errorMessage(error)}\n`);
-  process.exitCode = 1;
 }
+
+if (isMain(import.meta.url))
+  await runPane("Confirm Sandbox change", (ui) => {
+    const mapping = readState().mappings[process.env.BLAXEL_HERDR_MAPPING_ID];
+    if (!mapping)
+      throw new PluginError(
+        "mapping_not_found",
+        "The requested mapping no longer exists.",
+      );
+    return runDestructive(
+      process.env.BLAXEL_HERDR_DESTRUCTIVE_ACTION,
+      mapping,
+      ui,
+      sourceContext(),
+    );
+  });

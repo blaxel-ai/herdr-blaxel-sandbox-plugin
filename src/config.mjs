@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { AGENT_KINDS } from "./adapters.mjs";
 
 import {
   DEFAULT_IDLE_DELETE,
@@ -29,7 +30,7 @@ export const DEFAULT_CONFIG = Object.freeze({
 });
 
 const ALLOWED_KEYS = new Set(Object.keys(DEFAULT_CONFIG));
-const AGENTS = new Set(["codex", "claude-code", "opencode"]);
+const AGENTS = new Set(AGENT_KINDS);
 
 function requireString(value, key, { nullable = false } = {}) {
   if (nullable && value === null) return;
@@ -215,4 +216,21 @@ export function loadConfig(options = {}) {
     );
   }
   return validateConfig(parsed);
+}
+
+export function saveConfig(candidate, options = {}) {
+  const config = validateConfig(candidate);
+  const directory = options.directory ?? configDirectory(options.env);
+  fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+  const target = path.join(directory, "config.json");
+  const temporary = `${target}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(config, null, 2)}\n`, {
+      mode: 0o600,
+    });
+    fs.renameSync(temporary, target);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
+  return config;
 }

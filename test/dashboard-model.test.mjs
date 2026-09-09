@@ -36,7 +36,7 @@ test("repositoryInfo presents repository and branch without changing state", () 
 });
 
 test("missing mappings require three confirmed refreshes before pruning", () => {
-  const mapping = { id: "mapping-1" };
+  const mapping = { id: "mapping-1", lifecycleState: "ready" };
   const cache = new Map([[mapping.id, { exists: false, status: "MISSING" }]]);
   const counts = new Map();
   assert.deepEqual(missingMappingsToPrune([mapping], cache, counts), []);
@@ -47,4 +47,20 @@ test("missing mappings require three confirmed refreshes before pruning", () => 
   cache.set(mapping.id, { exists: true, status: "DEPLOYED" });
   assert.deepEqual(missingMappingsToPrune([mapping], cache, counts), []);
   assert.equal(counts.has(mapping.id), false);
+});
+
+test("dashboard never prunes active provisioning or deletion", () => {
+  for (const lifecycleState of [
+    "provisional",
+    "creating",
+    "uploading",
+    "preparing",
+    "deleting",
+  ]) {
+    const mapping = { id: "active", lifecycleState };
+    const cache = new Map([[mapping.id, { exists: false }]]);
+    const counts = new Map();
+    for (let i = 0; i < 5; i++)
+      assert.deepEqual(missingMappingsToPrune([mapping], cache, counts), []);
+  }
 });

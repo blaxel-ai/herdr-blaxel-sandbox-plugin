@@ -60,8 +60,13 @@ jobs:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.live))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        agent: [codex, claude-code, opencode, pi]
     concurrency:
-      group: herdr-live-smoke
+      group: herdr-live-smoke-${{ matrix.agent }}
       cancel-in-progress: false
     environment: herdr-live-smoke
     steps:
@@ -84,11 +89,12 @@ jobs:
           test -n "$BL_WORKSPACE" || { echo "Configure BL_WORKSPACE in the herdr-live-smoke environment."; exit 1; }
       - name: Fresh install and complete disposable lifecycle
         env:
+          TEST_AGENT: ${{ matrix.agent }}
           BL_API_KEY: ${{ secrets.BL_API_KEY }}
           BL_WORKSPACE: ${{ vars.BL_WORKSPACE }}
         run: |
           bl login "$BL_WORKSPACE"
-          python3 scripts/herdr-smoke.py --install-ref "$GITHUB_SHA" --live
+          python3 scripts/herdr-smoke.py --install-ref "$GITHUB_SHA" --live --agent "$TEST_AGENT"
       - name: Remove runner CLI credentials
         if: always()
         env:

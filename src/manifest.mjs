@@ -89,6 +89,17 @@ export function pathExclusionReason(relativePath, config) {
   ) {
     return "blocked-directory";
   }
+  // Tool credentials and conversation archives must never ride with source files.
+  const credentialPaths = [
+    ".pi/agent/",
+    ".codex/auth.json",
+    ".codex/sessions/",
+    ".claude/projects/",
+    ".claude/.credentials.json",
+    ".local/share/opencode/auth.json",
+  ];
+  if (credentialPaths.some((value) => `/${normalized}`.includes(`/${value}`)))
+    return "agent-credentials";
   if (config.allowSensitivePaths.includes(normalized)) return null;
   const base = components.at(-1);
   const lowerBase = base.toLowerCase();

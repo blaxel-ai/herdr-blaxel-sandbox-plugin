@@ -61,6 +61,7 @@ body:
         - Codex
         - Claude Code
         - OpenCode
+        - Pi
         - Not agent-specific
     validations:
       required: true

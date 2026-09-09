@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 
 import { getAdapter } from "./adapters.mjs";
 import { loadConfig } from "./config.mjs";
+import { connectionIsCurrent } from "./mappings.mjs";
 import { PluginError, errorMessage } from "./result.mjs";
 import { sandboxInfo } from "./sandbox.mjs";
 import { readState, updateState } from "./state.mjs";
@@ -10,7 +11,7 @@ import { readState, updateState } from "./state.mjs";
 let mappingId;
 
 async function waitForDismiss() {
-  if (process.env.HERDR_ENV !== "1") return;
+  if (!process.stdin.isTTY) return;
   process.stdout.write("\nPress any key to close this pane.\n");
   process.stdin.setRawMode?.(true);
   process.stdin.resume();
@@ -31,12 +32,6 @@ try {
       `Mapping ${mappingId} does not exist.`,
     );
   const adapter = getAdapter(mapping.agentKind);
-  const remote = await sandboxInfo(mapping);
-  if (!remote.exists)
-    throw new PluginError(
-      "sandbox_not_found",
-      `Sandbox ${mapping.sandboxName} no longer exists.`,
-    );
   await updateState((state) => {
     const current = state.mappings[mappingId];
     if (!current)
@@ -53,6 +48,12 @@ try {
     };
     return state;
   });
+  const remote = await sandboxInfo(mapping);
+  if (!remote.exists)
+    throw new PluginError(
+      "sandbox_not_found",
+      `Sandbox ${mapping.sandboxName} no longer exists.`,
+    );
   const config = loadConfig();
   const args = [];
   const workspace = mapping.blaxelWorkspace ?? config.workspace;
@@ -72,7 +73,7 @@ try {
   });
   await updateState((state) => {
     const current = state.mappings[mappingId];
-    if (current) {
+    if (connectionIsCurrent(current, process.env.HERDR_PANE_ID)) {
       state.mappings[mappingId] = {
         ...current,
         lifecycleState: exitCode === 0 ? "ready" : "failed",
@@ -84,18 +85,18 @@ try {
     }
     return state;
   });
-  if (exitCode !== 0) {
-    process.stdout.write(
-      `\nThe Blaxel terminal exited with code ${exitCode}.\n`,
-    );
-    await waitForDismiss();
-  }
+  process.stdout.write(
+    exitCode === 0
+      ? "\nSession disconnected. Reconnect from the dashboard to continue.\n"
+      : `\nThe Blaxel terminal exited with code ${exitCode}. Reconnect from the dashboard to retry.\n`,
+  );
+  await waitForDismiss();
   process.exitCode = exitCode;
 } catch (error) {
   if (mappingId) {
     await updateState((state) => {
       const current = state.mappings[mappingId];
-      if (current) {
+      if (connectionIsCurrent(current, process.env.HERDR_PANE_ID)) {
         state.mappings[mappingId] = {
           ...current,
           lifecycleState: "failed",

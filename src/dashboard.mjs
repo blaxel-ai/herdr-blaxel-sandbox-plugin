@@ -1,11 +1,17 @@
 #!/usr/bin/env node
-import { getAdapter } from "./adapters.mjs";
+import { listAdapters, getAdapter } from "./adapters.mjs";
 import {
   formatAge,
   missingMappingsToPrune,
   repositoryInfo,
 } from "./dashboard-model.mjs";
 import { parsePluginContext } from "./context.mjs";
+import { loadConfig, saveConfig } from "./config.mjs";
+import { runOperation } from "./operation-pane.mjs";
+import { runDestructive } from "./confirmation-pane.mjs";
+import { showPreviews } from "./previews-pane.mjs";
+import { TerminalUI, plainText, fit } from "./terminal-ui.mjs";
+import stringWidth from "string-width";
 import { closePluginPane, openPluginPane } from "./herdr.mjs";
 import { sandboxInfo } from "./sandbox.mjs";
 import { readState, updateState } from "./state.mjs";
@@ -19,6 +25,27 @@ let message = "Loading Blaxel state...";
 let running = true;
 let syncing = false;
 let syncGeneration = 0;
+let finish;
+const terminal = new TerminalUI({
+  onKey: (text, key) => {
+    const value =
+      key.name === "escape"
+        ? "q"
+        : key.name === "up"
+          ? "k"
+          : key.name === "down"
+            ? "j"
+            : key.name === "return"
+              ? "c"
+              : key.ctrl && key.name === "c"
+                ? "q"
+                : text;
+    void handleKey(value).catch((error) => {
+      message = error.message;
+      render();
+    });
+  },
+});
 
 function mappings() {
   return Object.values(readState().mappings).sort((a, b) =>
@@ -49,11 +76,10 @@ function selectedMapping() {
 }
 
 function truncate(value, width) {
-  const text = String(value ?? "");
-  if (width <= 1) return text.slice(0, width);
-  return text.length <= width
-    ? text.padEnd(width)
-    : `${text.slice(0, width - 1)}…`;
+  const text = plainText(value ?? "");
+  return stringWidth(text) <= width
+    ? fit(text, width)
+    : `${fit(text, Math.max(0, width - 1))}…`;
 }
 
 function repo(mapping) {
@@ -73,51 +99,106 @@ function remoteLabel(mapping) {
 function render() {
   const items = mappings();
   const mapping = selectedMapping();
-  const width = Math.max(80, process.stdout.columns ?? 120);
-  const repoWidth = Math.min(28, Math.max(18, Math.floor(width * 0.22)));
-  const sandboxWidth = Math.min(38, Math.max(24, width - repoWidth - 46));
-  process.stdout.write("\u001b[2J\u001b[H\u001b[?25l");
-  process.stdout.write(
-    `Blaxel Sandboxes  ${syncing ? "syncing" : "live"}  ${items.length} tracked\n\n`,
-  );
-  process.stdout.write(
-    `   ${truncate("REPOSITORY / BRANCH", repoWidth)}  ${truncate("SANDBOX", sandboxWidth)}  ${truncate("AGENT", 12)}  ${truncate("STATE", 11)}  AGE\n`,
-  );
-  process.stdout.write(
-    `   ${"-".repeat(repoWidth)}  ${"-".repeat(sandboxWidth)}  ${"-".repeat(12)}  ${"-".repeat(11)}  ---\n`,
-  );
-  if (items.length === 0) {
-    process.stdout.write(
-      "   No tracked Sandboxes. Run sbx from a Git worktree.\n",
+  const config = loadConfig();
+  const width = process.stdout.columns ?? 100;
+  const height = process.stdout.rows ?? 30;
+  const repositoryWidth = Math.max(12, Math.min(32, width - 52));
+  const rows = [
+    "Blaxel Sandboxes",
+    `${items.length} tracked  |  New: ${getAdapter(config.agent).title}  |  ${syncing ? "Refreshing" : "Ready"}`,
+    "",
+  ];
+  if (!items.length)
+    rows.push(
+      "No tracked Sandboxes.",
+      "Press n to start from this Git worktree, or t to choose a coding tool.",
     );
-  }
-  for (const item of items) {
-    const repository = repo(item);
-    const marker = item.id === mapping?.id ? ">" : " ";
-    process.stdout.write(
-      `${marker}  ${truncate(`${repository.name} / ${repository.branch}`, repoWidth)}  ${truncate(item.sandboxName, sandboxWidth)}  ${truncate(item.agentKind, 12)}  ${truncate(remoteLabel(item), 11)}  ${formatAge(item.createdAt)}\n`,
+  else {
+    rows.push(
+      `   ${truncate("REPOSITORY / BRANCH", repositoryWidth)}  ${truncate("TOOL", 12)}  ${truncate("STATE", 11)}  AGE`,
     );
-  }
-  if (mapping) {
-    const repository = repo(mapping);
+    const capacity = Math.max(1, height - 16);
+    const start = Math.max(0, selectedIndex(items) - capacity + 1);
+    for (const item of items.slice(start, start + capacity)) {
+      const repository = repo(item);
+      rows.push(
+        `${item.id === mapping?.id ? ">" : " "}  ${truncate(`${repository.name} / ${repository.branch}`, repositoryWidth)}  ${truncate(getAdapter(item.agentKind).title, 12)}  ${truncate(item.lifecycleState === "connected" ? remoteLabel(item) : item.lifecycleState, 11)}  ${formatAge(item.createdAt)}`,
+      );
+    }
+    if (items.length > capacity)
+      rows.push(
+        `Showing ${start + 1}-${Math.min(start + capacity, items.length)} of ${items.length}`,
+      );
     const remote = remoteCache.get(mapping.id);
-    process.stdout.write(
-      `\nSelected\n  Repository: ${repository.path}${mapping.relativeCwd === "." ? "" : ` (${mapping.relativeCwd})`}\n  Sandbox:   ${mapping.sandboxName}\n  Workspace: ${mapping.blaxelWorkspace}\n  Agent:     ${mapping.agentKind}${mapping.installedVersion ? ` ${mapping.installedVersion}` : ""}\n  State:     local ${mapping.lifecycleState} / remote ${remoteLabel(mapping)}\n  Cleanup:   ${remote?.ttl ? `automatic after ${remote.ttl} idle` : "checking idle policy"}\n`,
+    rows.push(
+      "",
+      `Sandbox:   ${mapping.sandboxName}`,
+      `Workspace: ${mapping.blaxelWorkspace}`,
+      `Worktree:  ${mapping.localRoot}`,
+      `Cleanup:   ${remote?.ttl ? `after ${remote.ttl} idle` : "checking idle policy"}`,
     );
+    if (mapping.lastError || remote?.error)
+      rows.push(`Error: ${mapping.lastError ?? remote.error}`);
   }
-  process.stdout.write(
-    "\n[up/down or j/k] Select  [enter/c] Connect  [n] New  [a] Apply  [i] Info  [l] Logs\n[p] Previews  [s] Stop  [x] Replace  [d] Delete  [r] Refresh  [q] Close\n",
-  );
-  if (message) process.stdout.write(`\n${truncate(message, width - 2)}\n`);
+  rows.push("", "[n] New  [t] Tool  [w] Workspace  [r] Refresh  [q/Esc] Close");
+  if (mapping)
+    rows.push(
+      "[j/k] Select  [Enter] Connect  [a] Apply  [i] Info  [l] Logs",
+      "[p] Previews  [s] Stop  [x] Replace  [d] Delete",
+    );
+  if (message && message !== "Ready.") rows.push("", message);
+  terminal.setBackground(rows);
 }
 
-function openOperation(operation, mapping) {
-  openPluginPane("operation", context, {
-    placement: "popup",
-    env: {
-      BLAXEL_HERDR_MAPPING_ID: mapping.id,
-      BLAXEL_HERDR_OPERATION: operation,
-    },
+async function openOperation(operation, mapping) {
+  await terminal.modal(
+    operation === "apply-changes" ? "Review changes" : `Blaxel ${operation}`,
+    (ui) => runOperation(operation, mapping, ui),
+  );
+}
+
+async function chooseTool() {
+  await terminal.modal("Choose a coding tool", async (ui) => {
+    const adapters = listAdapters();
+    const config = loadConfig();
+    ui.write(
+      "Choose the default for new Sandboxes. Existing Sandboxes keep their tool.\n",
+    );
+    adapters.forEach((adapter, index) =>
+      ui.write(
+        `${index + 1}. ${adapter.title} ${adapter.expectedVersion}${adapter.kind === config.agent ? " (current)" : ""}`,
+      ),
+    );
+    ui.write(
+      "\nProvider keys are encrypted when present. Otherwise sign in inside the Sandbox. Switching tools resets tool arguments.",
+    );
+    const answer = await ui.ask("Tool number, Esc to cancel:");
+    if (!answer) return;
+    const adapter = adapters[Number(answer.trim()) - 1];
+    if (!adapter) throw new Error("Choose a tool from the numbered list.");
+    saveConfig({
+      ...loadConfig(),
+      agent: adapter.kind,
+      agentArgs: adapter.kind === config.agent ? config.agentArgs : [],
+    });
+    message = `${adapter.title} selected for new Sandboxes.`;
+  });
+}
+
+async function chooseWorkspace() {
+  await terminal.modal("Choose a Blaxel workspace", async (ui) => {
+    ui.write(
+      `Current setting: ${loadConfig().workspace ?? "current CLI workspace"}\nEnter a workspace name, or type default to use the CLI workspace. Start will check login before creating anything.`,
+    );
+    const answer = (await ui.ask("Workspace, Esc to cancel:")).trim();
+    if (!answer) return;
+    if (answer !== "default" && !/^[a-z0-9][a-z0-9-]*$/.test(answer))
+      throw new Error("Use the workspace name shown by bl workspaces.");
+    saveConfig({
+      ...loadConfig(),
+      workspace: answer === "default" ? null : answer,
+    });
+    message = "Workspace setting saved for new Sandboxes.";
   });
 }
 
@@ -134,16 +215,18 @@ function connect(mapping) {
 }
 
 function createAnother(mapping) {
-  const adapter = getAdapter(mapping.agentKind);
+  const adapter = getAdapter(loadConfig().agent);
   const workspaceId =
-    mapping.sourcePaneId?.split(":", 1)[0] ?? context.workspace_id;
-  const sourceContext = {
-    workspace_id: workspaceId,
-    workspace_cwd: mapping.localRoot,
-    focused_pane_id: mapping.sourcePaneId,
-    focused_pane_cwd: mapping.localCwd,
-    worktree: { checkout_path: mapping.localRoot },
-  };
+    mapping?.sourcePaneId?.split(":", 1)[0] ?? context.workspace_id;
+  const sourceContext = mapping
+    ? {
+        workspace_id: workspaceId,
+        workspace_cwd: mapping.localRoot,
+        focused_pane_id: mapping.sourcePaneId,
+        focused_pane_cwd: mapping.localCwd,
+        worktree: { checkout_path: mapping.localRoot },
+      }
+    : context;
   openPluginPane("start", context, {
     placement: "tab",
     workspaceId,
@@ -154,14 +237,11 @@ function createAnother(mapping) {
   });
 }
 
-function destructive(action, mapping) {
-  openPluginPane("confirmation", context, {
-    placement: "popup",
-    env: {
-      BLAXEL_HERDR_MAPPING_ID: mapping.id,
-      BLAXEL_HERDR_DESTRUCTIVE_ACTION: action,
-    },
-  });
+async function destructive(action, mapping) {
+  await terminal.modal(
+    action === "replace" ? "Replace Sandbox" : "Delete Sandbox",
+    (ui) => runDestructive(action, mapping, ui, context),
+  );
 }
 
 async function pruneExpired(items) {
@@ -172,6 +252,15 @@ async function pruneExpired(items) {
     for (const id of ids) {
       const mapping = state.mappings[id];
       if (!mapping) continue;
+      const observed = items.find((item) => item.id === id);
+      if (
+        !observed ||
+        observed.updatedAt !== mapping.updatedAt ||
+        !["ready", "connected", "stopped", "missing", "failed"].includes(
+          mapping.lifecycleState,
+        )
+      )
+        continue;
       removed.push(mapping);
       delete state.mappings[id];
     }
@@ -224,6 +313,7 @@ async function handleKey(key) {
   const mapping = selectedMapping();
   if (key === "q" || key === "\u0003") {
     running = false;
+    finish();
     return;
   }
   if (key === "\u001b[A" || key === "k") select(items, -1);
@@ -231,49 +321,45 @@ async function handleKey(key) {
   else if ((key === "\r" || key === "\n" || key === "c") && mapping) {
     connect(mapping);
     message = `Opened ${mapping.sandboxName}.`;
-  } else if (key === "n" && mapping) {
+  } else if (key === "t") await chooseTool();
+  else if (key === "w") await chooseWorkspace();
+  else if (key === "n") {
     createAnother(mapping);
-    message = `Creating another Sandbox for ${repo(mapping).name}.`;
-  } else if (key === "a" && mapping) openOperation("apply-changes", mapping);
-  else if (key === "i" && mapping) openOperation("info", mapping);
-  else if (key === "l" && mapping) openOperation("logs", mapping);
-  else if (key === "s" && mapping) openOperation("stop", mapping);
+    message = "Creating a new independent Sandbox.";
+  } else if (key === "a" && mapping)
+    await openOperation("apply-changes", mapping);
+  else if (key === "i" && mapping) await openOperation("info", mapping);
+  else if (key === "l" && mapping) await openOperation("logs", mapping);
+  else if (key === "s" && mapping) await openOperation("stop", mapping);
   else if (key === "p" && mapping) {
-    openPluginPane("previews", context, {
-      placement: "popup",
-      env: { BLAXEL_HERDR_MAPPING_ID: mapping.id },
-    });
-  } else if (key === "x" && mapping) destructive("replace", mapping);
-  else if (key === "d" && mapping) destructive("delete", mapping);
+    await terminal.modal("Application previews", (ui) =>
+      showPreviews(mapping, ui),
+    );
+  } else if (key === "x" && mapping) await destructive("replace", mapping);
+  else if (key === "d" && mapping) await destructive("delete", mapping);
   else if (key === "r") {
-    message = "Refreshing Blaxel state...";
+    repositoryCache.clear();
+    message = "";
     void refreshRemote();
   }
   render();
 }
 
-if (!process.stdin.isTTY || !process.stdout.isTTY) {
-  console.error("The Blaxel dashboard requires an interactive terminal.");
-  process.exitCode = 1;
-} else {
-  process.stdin.setRawMode(true);
-  process.stdin.setEncoding("utf8");
-  process.stdin.resume();
-  process.stdout.write("\u001b[?1049h");
+let syncTimer;
+let renderTimer;
+try {
+  terminal.start();
   render();
   void refreshRemote();
-  const syncTimer = setInterval(() => void refreshRemote(), 2_000);
-  const renderTimer = setInterval(render, 1_000);
-  try {
-    for await (const key of process.stdin) {
-      await handleKey(key);
-      if (!running) break;
-    }
-  } finally {
-    clearInterval(syncTimer);
-    clearInterval(renderTimer);
-    syncGeneration += 1;
-    process.stdin.setRawMode(false);
-    process.stdout.write("\u001b[?25h\u001b[?1049l");
-  }
+  syncTimer = setInterval(() => void refreshRemote(), 2_000);
+  renderTimer = setInterval(render, 1_000);
+  await new Promise((resolve) => {
+    finish = resolve;
+  });
+} finally {
+  clearInterval(syncTimer);
+  clearInterval(renderTimer);
+  running = false;
+  syncGeneration += 1;
+  terminal.close();
 }
