@@ -88,6 +88,8 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
     def probe(operation):
         completed = subprocess.run(["node", str(repo / "scripts/live-probe.mjs"), operation], env=probe_env, capture_output=True, text=True, timeout=180)
         if completed.returncode != 0:
+            for diagnostic in re.findall(r"^PROBE_HTTP [a-z-]+=\d{3}$", completed.stdout, re.MULTILINE):
+                print(diagnostic, flush=True)
             locations = re.findall(r"live-probe\.mjs:\d+:\d+", completed.stderr)
             raise AssertionError(f"Live probe failed: {operation}; {','.join(locations)}")
         print(completed.stdout.strip(), flush=True)
@@ -258,22 +260,6 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
             herdr("pane", "send-text", confirmation, "DELETE\n")
             wait_for(lambda: not json.loads(state_file.read_text())["mappings"], "typed deletion", 90)
             print("PASS typed deletion: incorrect text preserves sandbox; DELETE removes mapping", flush=True)
-    except Exception:
-        if probe_env:
-            try:
-                current = next(iter(json.loads(state_file.read_text())["mappings"].values()), None)
-                if current and current.get("remotePaneId"):
-                    screen = herdr("pane", "read", current["remotePaneId"], "--source", "visible")
-                    safe_lines = []
-                    for line in screen.splitlines():
-                        if re.search(r"(?i)api.?key|token|secret|sk-|https?://", line):
-                            safe_lines.append("[credential or URL line omitted]")
-                        else:
-                            safe_lines.append(line)
-                    print("DIAGNOSTIC " + args.agent + " terminal:\n" + "\n".join(safe_lines[-28:]), flush=True)
-            except Exception:
-                print("DIAGNOSTIC terminal is no longer available", flush=True)
-        raise
     finally:
         try:
             if probe_env:
