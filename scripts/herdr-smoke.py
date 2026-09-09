@@ -130,10 +130,12 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
             probe_env = dict(env, HERDR_PLUGIN_CONFIG_DIR=str(plugin_config), HERDR_PLUGIN_STATE_DIR=str(state_file.parent))
 
             def mapping():
-                return next(iter(json.loads(state_file.read_text())["mappings"].values()))
+                return next(iter(json.loads(state_file.read_text())["mappings"].values()), None)
 
             def connected():
                 current = mapping()
+                if current is None:
+                    return None
                 assert current["lifecycleState"] != "failed", "Start or terminal connection failed"
                 return current if current["lifecycleState"] == "connected" else None
 
