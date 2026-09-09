@@ -11,13 +11,13 @@ export const INTEGRATION_PRODUCT_TOKEN = `${name}/${version}`;
 const INSTALLED = Symbol.for("blaxel.integrationUserAgent");
 
 /**
- * Appends the integration product token to every Blaxel request's User-Agent.
+ * Appends the integration product token to this process's Blaxel SDK requests.
  *
  * The SDK builds headers from one getter that both control-plane calls and
  * sandbox data-plane calls read, so shadowing it on the singleton covers every
- * request without touching credentials or adding any other header. Idempotent.
- * Newer SDKs expose `settings.integration` for this; the shadow keeps working
- * on the pinned version until the plugin moves to it.
+ * authenticated SDK request without touching credentials or adding any other
+ * header. Idempotent. The pinned SDK has no native integration setting.
+ * Requests made by the separate bl CLI process retain the CLI's User-Agent.
  */
 export function installIntegrationUserAgent(target = settings) {
   if (target[INSTALLED] === true) return;

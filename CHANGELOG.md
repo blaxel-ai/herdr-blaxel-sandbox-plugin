@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Append the product token `herdr-blaxel-sandbox-plugin/<version>` to the Blaxel SDK User-Agent on every Blaxel request so Blaxel can attribute traffic to this plugin. No other header or data is added.
+- Add a dependency-free invoice summary example with tests and a Herdr edit/reconnect/apply walkthrough.
+- Append the product token `herdr-blaxel-sandbox-plugin/<version>` to this plugin's authenticated Blaxel SDK requests so Blaxel can attribute traffic to the integration. No other header or data is added; separate Blaxel CLI requests keep the CLI User-Agent.
+- Refresh dependencies and override vulnerable TOML and YAML parsers with patched versions.
 - Add the first Blaxel Sandbox plugin for Herdr.
 - Add pinned Codex `0.147.0`, Claude Code `2.1.226`, and OpenCode `1.14.48` adapters with installed-version verification.
 - Add persistent remote sessions, immediate safety-filtered Start, checked patch apply, previews, dashboard, and explicit deletion.

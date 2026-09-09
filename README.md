@@ -171,6 +171,7 @@ Only permanent replacement and deletion require a typed `DELETE`. Normal start, 
 
 ## Learn more
 
+- [Runnable invoice summary example](examples/invoice-summary/README.md)
 - [Configuration](docs/configuration.md)
 - [Keybindings](docs/keybindings.md)
 - [Troubleshooting](docs/troubleshooting.md)
