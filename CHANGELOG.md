@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `llms.txt`, contributor maintenance guidance, and a compatibility table.
+- Exercise minimum/latest Herdr on Linux and macOS, check Node.js 22/24, and add weekly dependency updates and an opt-in disposable live lifecycle workflow.
+- Normalize Sandbox names after truncation so custom prefixes cannot produce consecutive hyphens rejected by Blaxel.
+
 - Add a dependency-free invoice summary example with tests and a Herdr edit/reconnect/apply walkthrough.
 - Append the product token `herdr-blaxel-sandbox-plugin/<version>` to this plugin's authenticated Blaxel SDK requests so Blaxel can attribute traffic to the integration. No other header or data is added; separate Blaxel CLI requests keep the CLI User-Agent.
 - Refresh dependencies and override vulnerable TOML and YAML parsers with patched versions.

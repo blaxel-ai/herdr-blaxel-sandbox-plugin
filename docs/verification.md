@@ -15,6 +15,17 @@ The test suite covers strict configuration, Herdr context, complete-file secret 
 
 ## Herdr checks
 
+Run the automated registration, installed dependency, runnable example, and dashboard checks against each host version:
+
+```bash
+python3 scripts/install-test-tools.py --herdr 0.8.0 --directory /tmp/herdr-minimum
+python3 scripts/herdr-smoke.py --herdr /tmp/herdr-minimum/herdr
+python3 scripts/install-test-tools.py --herdr latest --directory /tmp/herdr-current
+python3 scripts/herdr-smoke.py --herdr /tmp/herdr-current/herdr
+```
+
+The installer verifies SHA256 digests from official GitHub release metadata. Tests isolate config, state, sockets, and panes in their own named session. They do not replace the installed Herdr binary or touch existing sessions.
+
 Use an isolated Herdr session and a temporary Git repository.
 
 Verify:
@@ -29,6 +40,27 @@ Verify:
 8. Delete and Replace require typed confirmation.
 
 ## Live Blaxel checks
+
+With the Blaxel CLI installed and authenticated, select an approved disposable test workspace and run:
+
+```bash
+export BL_WORKSPACE=your-test-workspace
+python3 scripts/herdr-smoke.py --herdr /tmp/herdr-current/herdr --live
+```
+
+Add `--install-ref <full-40-character-commit>` to verify a fresh GitHub installation and its install-time `npm ci --omit=dev` build. The commit must already be pushed. Without this flag, the test links the current local checkout.
+
+The automated test launches pinned Codex in real Herdr, verifies the same remote tmux identity after disconnect/reconnect, makes a deterministic invoice edit, checks the private preview with and without a token, verifies an unknown route, exercises canceled/conflicting/approved/repeated Apply, checks Stop preserves files, and exercises incorrect/correct typed deletion. Operation panes use split placement so headless Herdr can expose their terminal contents; the same production pane entrypoints handle approval and deletion. Preview terminal contents and bearer URLs are never printed. Cleanup runs in `finally`; sandboxes also have a 30-minute idle TTL. Interrupted cleanup must be treated as a failed run and checked in the test workspace before retrying.
+
+This smoke test deliberately removes model-provider keys and does not make a model call. It verifies the plugin lifecycle and Codex launch, including its sign-in screen. A real prompted tutorial walkthrough and checks for the other agent adapters remain separate release evidence.
+
+### Scheduled live test setup
+
+The `CI` workflow runs unit/compatibility checks on pull requests, pushes, and Mondays. After merge, the Monday run also executes the live test. `workflow_dispatch` can request it manually on `main`. Live credentials are never supplied to a pull request or non-main branch.
+
+Create the GitHub environment `herdr-live-smoke` with a dedicated test-workspace service-account `BL_API_KEY` secret and a `BL_WORKSPACE` environment variable. Grant only the Sandbox and runtime permissions needed by this test. Do not reuse personal CLI login tokens or production-wide credentials. Missing configuration fails the live job explicitly. Configure these credentials through the approved team process; adding the workflow alone does not activate a successful hosted live test.
+
+After an approved merge, verify the public tutorial, navigation, overview card, generated docs `llms.txt`, and the Herdr marketplace entry. A PR preview or a successful fresh install of a candidate commit is not proof of publication.
 
 Use a short-lived test Sandbox and private previews.
 

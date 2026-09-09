@@ -54,7 +54,7 @@ export function sandboxNameFor({
   const base =
     slug(path.basename(localRoot)).slice(0, baseLength) ||
     "worktree".slice(0, baseLength);
-  return `${prefixPart}-${agent}-${base}-${digest}`;
+  return slug(`${prefixPart}-${agent}-${base}-${digest}`);
 }
 
 export function tmuxSessionFor(mapping) {

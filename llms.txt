@@ -1,0 +1,19 @@
+# Blaxel Sandbox for Herdr
+
+> Run Codex, Claude Code, or OpenCode in persistent Blaxel sandboxes from Herdr. Upload a filtered Git worktree, reconnect to the same agent, and apply reviewed changes locally.
+
+Requires Herdr 0.8.0 or newer, Node.js 22 or newer, Git, and the Blaxel CLI. Install with `herdr plugin install blaxel-ai/herdr-blaxel-sandbox-plugin`. Every Start creates an independent sandbox. Stop preserves files; Delete permanently removes the sandbox after typed confirmation. Previews are private by default. Never copy host credential files into a sandbox.
+
+## Usage
+
+- [Quick start](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/README.md): Installation, actions, and dashboard.
+- [Configuration](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/docs/configuration.md): Agent selection, workspace, private previews, upload filtering, and idle deletion.
+- [Invoice example](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/examples/invoice-summary/README.md): A dependency-free worktree for Start, reconnect, and checked apply.
+- [Keybindings](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/docs/keybindings.md): Invoke local plugin actions while a remote agent pane is focused.
+- [Troubleshooting](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/docs/troubleshooting.md): Authentication, agent startup, conflicts, and previews.
+
+## Maintenance
+
+- [Repository instructions](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/AGENTS.md): Contributor rules and safety invariants.
+- [Verification](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/docs/verification.md): Compatibility and real lifecycle checks.
+- [Release procedure](https://raw.githubusercontent.com/blaxel-ai/herdr-blaxel-sandbox-plugin/main/docs/releasing.md): Version, publication, and cleanup gates.
