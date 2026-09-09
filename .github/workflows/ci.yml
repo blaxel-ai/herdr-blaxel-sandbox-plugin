@@ -86,4 +86,14 @@ jobs:
         env:
           BL_API_KEY: ${{ secrets.BL_API_KEY }}
           BL_WORKSPACE: ${{ vars.BL_WORKSPACE }}
-        run: python3 scripts/herdr-smoke.py --install-ref "$GITHUB_SHA" --live
+        run: |
+          bl login "$BL_WORKSPACE"
+          python3 scripts/herdr-smoke.py --install-ref "$GITHUB_SHA" --live
+      - name: Remove runner CLI credentials
+        if: always()
+        env:
+          BL_WORKSPACE: ${{ vars.BL_WORKSPACE }}
+        run: |
+          if command -v bl >/dev/null 2>&1 && test -n "$BL_WORKSPACE"; then
+            bl logout "$BL_WORKSPACE"
+          fi
