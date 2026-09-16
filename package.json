@@ -17,7 +17,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@blaxel/core": "0.3.11",
+    "@blaxel/core": "0.3.21",
     "string-width": "8.2.2"
   },
   "devDependencies": {
