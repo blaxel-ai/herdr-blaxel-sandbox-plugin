@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Update the Blaxel SDK to `0.3.30` and refresh dependencies to clear the proxy-addr, MCP SDK, brace-expansion, ip-address, and fast-uri advisories.
+- Open popup panes as full-size overlays in the smoke test so Herdr `0.9.4` and later render them above the 40 x 12 minimum.
+
 - Keep long prompts and Unicode input readable, preserve newer connection state, and bound complete patch reviews to 1 MiB with independent temporary exports.
 
 - Preserve truecolor in remote coding terminals, hide the redundant tmux status bar, and give shared dialogs rounded borders and colored patch reviews.
