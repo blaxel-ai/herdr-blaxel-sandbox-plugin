@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Update the Blaxel SDK to `0.3.20`, its first release without the vulnerable `toml` parser.
+- Update the Blaxel SDK to `0.3.20`, its first release without the vulnerable `toml` parser, and update body-parser, qs, and zod to their first patched releases.
 - Open popup panes as full-size overlays in the smoke test so Herdr `0.9.4` and later render them above the 40 x 12 minimum.
 
 - Keep long prompts and Unicode input readable, preserve newer connection state, and bound complete patch reviews to 1 MiB with independent temporary exports.
