@@ -49,7 +49,7 @@ If you are signed out, Start runs the official Blaxel login flow and then contin
 | Herdr                               | Minimum `0.8.0`; current release checked: `0.9.5` |
 | Local Node.js                       | `22` and `24` in CI                               |
 | Blaxel CLI                          | `0.1.110` used for lifecycle verification         |
-| Blaxel TypeScript SDK               | `0.3.30`                                          |
+| Blaxel TypeScript SDK               | `0.3.20`                                          |
 | Codex / Claude Code / OpenCode / Pi | `0.147.0` / `2.1.226` / `1.14.48` / `0.73.1`      |
 
 Michael Stolarz maintains this integration. CI exercises the real minimum and latest Herdr on Linux and macOS, with weekly checks for upstream changes. Dependabot proposes npm and GitHub Actions updates. See [verification](docs/verification.md) for the disposable live smoke test, credentials setup, and the distinction between lifecycle and model verification.
