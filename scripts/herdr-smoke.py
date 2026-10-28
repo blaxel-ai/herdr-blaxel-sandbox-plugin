@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import tomllib
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--herdr", default="herdr")
@@ -78,7 +79,12 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
 
     def await_text(pane, needle, timeout=60):
         # Do not forward terminal contents: preview panes contain bearer URLs.
-        wait_for(lambda: needle in text(pane), needle, timeout)
+        try:
+            wait_for(lambda: needle in text(pane), needle, timeout)
+        except AssertionError:
+            if "Terminal too small" in text(pane):
+                raise AssertionError(f"Timed out: {needle}; the pane is smaller than 40 x 12") from None
+            raise
 
     def close(pane):
         herdr("plugin", "pane", "close", pane)
@@ -98,7 +104,8 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
     server = subprocess.Popen([*cli, "server"], env=env, stdin=subprocess.DEVNULL, stdout=server_log, stderr=server_log)
     try:
         wait_for(lambda: (config / "sessions/smoke/herdr.sock").exists(), "Herdr server")
-        print(run([binary, "--version"]).strip(), flush=True)
+        herdr_version = run([binary, "--version"]).strip()
+        print(herdr_version, flush=True)
         if args.install_ref:
             assert len(args.install_ref) == 40 and all(c in "0123456789abcdef" for c in args.install_ref)
             herdr("plugin", "install", "blaxel-ai/herdr-blaxel-sandbox-plugin", "--ref", args.install_ref, "--yes")
@@ -121,8 +128,16 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
         plugin_config.mkdir(parents=True, exist_ok=True)
         (plugin_config / "config.json").write_text(json.dumps({"agent": args.agent, "agentArgs": json.loads(args.agent_args), "workspace": os.environ.get("BL_WORKSPACE"), "sandboxNamePrefix": "herdr-smoke", "idleDelete": "30m", "previewPorts": [3000], "publicPreviews": False}))
 
+        manifest = tomllib.loads((installed / "herdr-plugin.toml").read_text())
+        popups = {pane["id"] for pane in manifest["panes"] if pane.get("placement") == "popup"}
+
         def open_pane(entrypoint, extra=None):
-            command = ["plugin", "pane", "open", "--plugin", "blaxel.sandbox", "--entrypoint", entrypoint, "--placement", "split", "--target-pane", root, "--no-focus"]
+            # Popups have no pane ID to read, and nested splits fall below the
+            # 40 x 12 UI minimum, so open popups as full-size readable overlays.
+            placement = "overlay" if entrypoint in popups else "split"
+            command = ["plugin", "pane", "open", "--plugin", "blaxel.sandbox", "--entrypoint", entrypoint, "--placement", placement, "--no-focus"]
+            if placement == "split":
+                command.extend(["--target-pane", root])
             for key, value in (extra or {}).items():
                 command.extend(["--env", f"{key}={value}"])
             return result(*command)["plugin_pane"]["pane"]["pane_id"]
@@ -141,6 +156,12 @@ with tempfile.TemporaryDirectory(prefix="herdr-smoke-", dir="/tmp") as temporary
         wait_for(lambda: json.loads((plugin_config / "config.json").read_text())["agent"] == "pi", "Pi selected and saved")
         assert json.loads((plugin_config / "config.json").read_text())["previewPorts"] == [3000]
         (plugin_config / "config.json").write_text(original_config)
+        # A popup opened beside another plugin pane must render readably. Before
+        # 0.9.4, headless Herdr starts new panes at a borrowed size instead.
+        if tuple(int(part) for part in re.findall(r"\d+", herdr_version)[:3]) >= (0, 9, 4):
+            preview_pane = open_pane("previews", {"BLAXEL_HERDR_MAPPING_ID": "missing"})
+            await_text(preview_pane, "The requested mapping no longer exists.")
+            close(preview_pane)
         print("PASS plugin registration, dependencies, example tests and dashboard", flush=True)
         if args.live:
             # Exercise first-run Start directly from an empty dashboard.

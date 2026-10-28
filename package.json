@@ -17,7 +17,7 @@
     "node": ">=22"
   },
   "dependencies": {
-    "@blaxel/core": "0.3.11",
+    "@blaxel/core": "0.3.20",
     "string-width": "8.2.2"
   },
   "devDependencies": {
@@ -27,8 +27,7 @@
     "prettier": "^3.6.2"
   },
   "overrides": {
-    "js-yaml": "4.3.2",
-    "toml": "4.2.0"
+    "js-yaml": "4.3.2"
   },
   "keywords": [
     "herdr",
