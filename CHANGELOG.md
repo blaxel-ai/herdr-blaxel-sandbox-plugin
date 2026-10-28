@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Update `@hono/node-server` to `2.1.3`, its first release patched for GHSA-rmxm-3fg6-px4f.
+
 - Update the Blaxel SDK to `0.3.20`, its first release without the vulnerable `toml` parser, and update body-parser, qs, and zod to their first patched releases.
 - Open popup panes as full-size overlays in the smoke test so Herdr `0.9.4` and later render them above the 40 x 12 minimum.
 
