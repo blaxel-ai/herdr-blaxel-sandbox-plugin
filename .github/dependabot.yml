@@ -6,8 +6,38 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      development:
-        dependency-type: development
+      blaxel:
+        patterns:
+          - "@blaxel/*"
+    # Our own @blaxel/* packages track their latest release. Third-party packages
+    # stay at the lowest patched version: these ignores stop their version updates,
+    # and update-types ignores do not apply to security updates.
+    ignore:
+      - dependency-name: "string-width"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "@eslint/js"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "globals"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
+      - dependency-name: "prettier"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
   - package-ecosystem: github-actions
     directory: /
     schedule:
