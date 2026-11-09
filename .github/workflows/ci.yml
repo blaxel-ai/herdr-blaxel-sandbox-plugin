@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-14]
+        os: [ubuntu-24.04, macos-15]
         herdr: ["0.8.0", latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
